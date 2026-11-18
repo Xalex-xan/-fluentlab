@@ -1,5 +1,5 @@
-/* FluentLab 2.0 — ejercicios complementarios originales, revisados por regla. */
-const FLUENTLAB_EXTRA = {
+/* Aprende con Xanny — ejercicios complementarios originales, revisados por regla. */
+const XANNY_EXTRA = {
 'a1-1':[
 ['Which sentence introduces someone naturally?',['This my friend Sofia.','This is my friend Sofia.','This are my friend Sofia.'],1,'This is introduce a una persona en singular.'],
 ['A person asks, “Where are you from?” Choose a reply.',['I from Bogotá.','I is from Bogotá.','I am from Bogotá.'],2,'Con I, el verbo to be es am: I am from Bogotá.'],
@@ -99,7 +99,7 @@ const FLUENTLAB_EXTRA = {
 };
 
 /* Segunda pregunta auténtica sobre cada audio: alternancia al regresar al escenario. */
-const FLUENTLAB_LISTEN_EXTRA = {
+const XANNY_LISTEN_EXTRA = {
  l1:['Does the customer want milk?',['Yes, please.','No, thanks.','They do not mention milk.'],0,'Yes, please'],
  l2:['What time will they meet?',['At nine.','At ten.','At twelve.'],1,'at ten'],
  l3:['What is the dog called?',['Emma.','Sam.','Max.'],2,'Max'],

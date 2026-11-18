@@ -27,7 +27,11 @@ jobs:
         run: |
           sudo systemctl start postgresql.service
           sudo -u postgres createdb xanny_verify
-          sudo -u postgres psql -X -d xanny_verify -f "$PWD/tests/schema.sql"
+          fixtures=$(mktemp -d)
+          chmod 755 "$fixtures"
+          install -m 644 supabase_setup.sql "$fixtures/supabase_setup.sql"
+          install -D -m 644 tests/schema.sql "$fixtures/tests/schema.sql"
+          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/schema.sql"
   pages:
     if: github.ref == 'refs/heads/main'
     needs: verify

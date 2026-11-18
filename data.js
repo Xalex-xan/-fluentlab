@@ -1,4 +1,4 @@
-/* FluentLab — contenido original redactado para esta aplicación. */
+/* Aprende con Xanny — contenido original redactado para esta aplicación. */
 const DATA = (() => {
 const lessons = [
 {id:'a1-1',level:'A1',icon:'👋',tag:'Conversación',title:'Saludar y presentarte',mins:8,objective:'Presentarte y preguntar el nombre de otra persona.',rule:'Usa “I am / I’m” para presentarte y “What is your name?” para preguntar el nombre.',example:'Hi! I’m Alex. What’s your name?',es:'¡Hola! Soy Alex. ¿Cómo te llamas?',questions:[['Choose the correct introduction.',['I am from Colombia.','I from Colombia.','I is from Colombia.'],0,'Con I usamos am, no is.'],['What is the natural reply to “Nice to meet you”?',['Nice to meet you too.','I am twenty.','Good night yesterday.'],0,'Too expresa reciprocidad: igualmente.']]},

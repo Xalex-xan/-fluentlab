@@ -52,6 +52,7 @@ async function verifyNav(page, mobile) {
     }
     await target.click();
     await page.locator('.page h1').waitFor();
+    assert.doesNotMatch(await page.locator('.page').innerText(), /FluentLab/i, id);
     assert.equal(new URL(page.url()).hash, '#' + id);
     const dimensions = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     assert.ok(dimensions[0] <= dimensions[1], id + ' desborda: ' + dimensions);

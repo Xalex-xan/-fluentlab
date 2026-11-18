@@ -22,7 +22,7 @@ function createTest(files, oldProgress) {
   };
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents[type]=fn};
   const run=Function('window','document','location','navigator','localStorage','setTimeout','URLSearchParams',
-    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,FLUENTLAB_EXTRA,FLUENTLAB_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
+    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,XANNY_EXTRA,XANNY_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
   const data=run(window,document,location,{},localStorage,()=>{},class {has(){return false}});
   return {...data,app,click:(a,d={})=>events.click.forEach(fn=>fn({target:{closest:()=>({dataset:{a,...d}})}})),
     input:(id,value)=>events.input.forEach(fn=>fn({target:{id,value}})),navigate:(hash)=>{location.hash='#'+hash;windowEvents.hashchange();},
@@ -155,6 +155,7 @@ test('carga todo el catálogo, las rutas y las configuraciones públicas', () =>
   for (const id of sections) {
     app.click('nav', {id});
     assert.ok(app.app.innerHTML.includes('<h1'), id);
+    assert.doesNotMatch(app.app.innerHTML, /FluentLab/i, id);
     const mobile = app.app.innerHTML.split('aria-label="Navegación móvil"')[1];
     assert.ok(mobile.includes('data-id="' + id + '"'), id + ' en móvil');
   }

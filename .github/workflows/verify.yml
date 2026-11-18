@@ -1,0 +1,26 @@
+name: Verificar FluentLab
+
+on:
+  push:
+    branches: [main, development/fluentlab-3.1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Pruebas de lógica y compatibilidad
+        run: node --test tests/fluentlab.test.cjs
+      - name: Instalar Chromium de prueba
+        run: |
+          npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
+          npx --no-install playwright install --with-deps chromium
+      - name: Probar escritorio, móvil y Service Worker
+        run: node tests/browser.cjs

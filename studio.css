@@ -21,3 +21,15 @@ body.light{--softgreen:rgba(80,143,69,.09);--caseborder:rgba(60,120,99,.19)}
 @media(max-width:1290px){.case-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:1060px){.case-layout{grid-template-columns:1fr}.dialogue-panel,.challenge-panel{padding:25px}.case-promo-art{min-width:145px;font-size:25px}.case-promo-art span:nth-child(2){font-size:32px}}
 @media(max-width:760px){.home-feature{padding:22px;display:block}.home-feature .button{margin-top:15px}.missions-feature{padding:26px;min-height:205px}.missions-feature h2{font-size:30px}.case-promo-art{display:none}.case-grid{grid-template-columns:1fr}.case-card{min-height:205px}.dialogue-panel,.challenge-panel,.transfer-panel{padding:20px}.context-description{font-size:17px}.mission-title-row{align-items:flex-start}.mission-title-row .case-emoji{width:55px;height:55px;font-size:29px}.mini-guide{gap:6px}.mini-guide span{padding:6px 8px;font-size:10px}.transfer-panel h2,.mission-summary h2{font-size:27px}.case-foot{flex-wrap:wrap}.mission-progress{font-size:11px}.main{padding-bottom:105px}}
 @media(prefers-reduced-motion:reduce){.case-card{transition:none}.page{animation:none}}
+
+/* Resultados de misiones y escritura */
+.learning-mode {margin-bottom: 14px;}
+.learning-mode p {margin: 4px 0 0;}
+.result-list {margin: 0;}
+.result-list div {display: flex; justify-content: space-between; gap: 12px; padding: 8px 0;}
+.result-list dd {margin: 0; font-weight: 750;}
+.option-explanations {padding-inline-start: 1.35rem;}
+.option-explanations li + li {margin-top: .65rem;}
+.debrief summary {cursor: pointer; font-weight: 700;}
+#missionWriteStatus:not(:empty) {margin: .65rem 0; font-weight: 650;}
+#missionWriteStatus:empty {margin: 0;}

@@ -1,8 +1,20 @@
-/* FluentLab 3.0 — Casos originales para practicar inglés contextual (no son materiales de terceros). */
+/* FluentLab 3.1 — Casos originales para practicar inglés contextual (no son materiales de terceros). */
 const MISSIONS = (() => {
   const Q = (prompt, choices, answer, why, hint, details) => ({prompt,choices,answer,why,hint,details});
   const V = (context, questions) => ({context,questions});
-  const M = (id,level,skill,icon,title,goal,minutes,variants,transfer,model,criteria) => ({id,level,skill,icon,title,goal,minutes,variants,transfer,model,criteria});
+  const M = (id, level, skill, icon, title, goal, minutes, variants, transfer, model, criteria) => {
+    const extendedVariants = variants.map((variant, variantIndex) => {
+      const translated = variant.questions.map((q, index) => {
+        const original = q.choices[q.answer];
+        const equivalent = MISSION_TRANSLATIONS[id][variantIndex * 2 + index];
+        const fromSpanish = { 'a2-schedule': [3], 'a2-travel': [1, 3], 'b2-data': [1] };
+        const spanish = fromSpanish[id]?.includes(variantIndex * 2 + index);
+        return {...q, example: spanish ? equivalent : original, translation: spanish ? original : equivalent};
+      });
+      return {...variant, questions: [...translated, MISSION_TRANSFERS[id][variantIndex]]};
+    });
+    return {id, level, skill, icon, title, goal, minutes, variants: extendedVariants, transfer, model, criteria};
+  };
   return [
     M('a2-delivery','A2','Resolver problemas','📦','Un paquete que no llega','Resolver un problema con un pedido y pedir el siguiente paso.',8,[
       V('Compraste unos audífonos por internet. El seguimiento indica “delivered”, pero no recibiste nada.',[

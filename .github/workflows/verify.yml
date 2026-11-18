@@ -1,8 +1,8 @@
-name: Verificar FluentLab
+name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/fluentlab-3.1]
+    branches: [main, development/aprende-con-xanny]
   workflow_dispatch:
 
 permissions:
@@ -22,3 +22,31 @@ jobs:
         run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
       - name: Probar escritorio, móvil y Service Worker
         run: node tests/browser.cjs
+
+      - name: Verificar el esquema de acceso con PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres createdb xanny_verify
+          sudo -u postgres psql -X -d xanny_verify -f "$PWD/tests/schema.sql"
+  pages:
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Comprobar la versión pública de GitHub Pages
+        shell: bash
+        run: |
+          base=https://xalex-xan.github.io/-fluentlab
+          for attempt in {1..18}; do
+            if html=$(curl --fail --silent --show-error --max-time 5 "$base/?release=${GITHUB_SHA}&attempt=$attempt") &&
+              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.2.0"* ]]; then
+              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.2.0")
+              printf '%s' "$manifest" | node -e "const m = JSON.parse(require('node:fs').readFileSync(0)); if(m.name !== 'Aprende con Xanny' || m.icons.length !== 2) process.exit(1);"
+              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.2.0" > /dev/null
+              printf 'Marca, manifest y mascota verificados en GitHub Pages.\n'
+              exit 0
+            fi
+            sleep 8
+          done
+          exit 1

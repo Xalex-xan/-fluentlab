@@ -1,4 +1,4 @@
-/* FluentLab Studio 3.0 — interfaz original, modular, accesible y ligera. */
+/* Aprende con Xanny — interfaz original, modular, accesible y ligera. */
 :root{--softgreen:rgba(181,239,126,.11);--violet:#cbb9ff;--caseborder:rgba(192,229,215,.14)}
 body{background-image:radial-gradient(ellipse 920px 400px at 90% -13%,rgba(80,146,126,.065),transparent 75%)}
 body.light{--softgreen:rgba(80,143,69,.09);--caseborder:rgba(60,120,99,.19)}
@@ -33,3 +33,89 @@ body.light{--softgreen:rgba(80,143,69,.09);--caseborder:rgba(60,120,99,.19)}
 .debrief summary {cursor: pointer; font-weight: 700;}
 #missionWriteStatus:not(:empty) {margin: .65rem 0; font-weight: 650;}
 #missionWriteStatus:empty {margin: 0;}
+
+/* Marca y jerarquía visual */
+:root {
+  --xanny-violet: #dccdff;
+  --xanny-gold: #ffd58f;
+}
+body.light {
+  --xanny-violet: #582d9b;
+}
+.brand {
+  min-height: 48px;
+  padding-inline: 7px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.brand-icon {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  padding: 2px;
+  object-fit: contain;
+  background: #d7c7fb;
+  box-shadow: none;
+  transform: none;
+}
+.brand-copy {min-width: 0;}
+.brand-text {display: block; font-size: 18px; line-height: 1.2; letter-spacing: -.035em;}
+.brand-text strong {color: var(--xanny-violet);}
+.brand-sub {margin-top: 4px; letter-spacing: .085em;}
+.breadcrumb-brand {color: var(--ink);}
+.hero {
+  align-items: center;
+  border-color: #d7c6ff35;
+  background: radial-gradient(ellipse at 84% 36%, #563b7c, transparent 55%), linear-gradient(120deg, #25213f, #332550);
+}
+.hero h1 {margin-top: 0;}
+.hero h1 em {color: #e0ceff;}
+.hero p {color: #eee7fa;}
+.hero .button.primary {
+  background: #e0ceff;
+  border-color: #e0ceff;
+  color: #261645;
+}
+.hero .button.primary:hover {background: #eee2ff; border-color: #eee2ff;}
+.xanny-hero {
+  gap: 0;
+  margin: 0;
+  min-height: 0;
+  align-self: center;
+  justify-items: center;
+}
+.xanny-hero img {
+  display: block;
+  width: min(100%, 206px);
+  height: auto;
+  filter: drop-shadow(0 6px 8px #170e31aa);
+}
+.xanny-hero figcaption {
+  color: var(--xanny-gold);
+  font: 750 16px var(--heading);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .xanny-hero img {animation: xanny-greeting .65s ease-out 1;}
+}
+@keyframes xanny-greeting {
+  from {transform: translateY(6px) rotate(-4deg);}
+  65% {transform: translateY(-4px) rotate(2deg);}
+  to {transform: translateY(0);}
+}
+.card, .case-card {border-radius: 18px;}
+.progress-ranking, .progress-timeline {margin: 0; padding: 0; list-style: none;}
+.progress-ranking li, .progress-timeline li {padding: 10px 0;}
+.progress-ranking li + li, .progress-timeline li + li {border-top: 1px solid var(--line);}
+.progress-ranking li {display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px;}
+.progress-ranking li span, .progress-timeline time {color: var(--muted); font-size: .84rem;}
+.progress-timeline .progress {margin-top: 6px;}
+@media (max-width: 920px) {
+  .brand {padding-inline: 0;}
+  .brand-copy {display: none;}
+}
+@media (max-width: 680px) {
+  .hero {grid-template-columns: minmax(0, 1fr) clamp(72px, 25vw, 118px); padding: 19px; gap: 10px;}
+  .hero h1 {font-size: clamp(28px, 7.2vw, 37px);}
+  .xanny-hero {display: grid; align-self: start; margin-top: 3px;}
+  .breadcrumb-brand + span {white-space: pre;}
+}

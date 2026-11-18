@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const files = Object.fromEntries([
   'index.html', 'manifest.webmanifest', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
 ].map(path => [path, readFileSync(join(__dirname, '..', path), 'utf8')]));
 const exists = path => existsSync(join(__dirname, '..', path));
 
@@ -22,7 +22,7 @@ function createTest(files, oldProgress) {
   };
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents[type]=fn};
   const run=Function('window','document','location','navigator','localStorage','setTimeout','URLSearchParams',
-    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst FluentCloud=window.FluentCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,FLUENTLAB_EXTRA,FLUENTLAB_LISTEN_EXTRA,AdaptiveLearning};');
+    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,FLUENTLAB_EXTRA,FLUENTLAB_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
   const data=run(window,document,location,{},localStorage,()=>{},class {has(){return false}});
   return {...data,app,click:(a,d={})=>events.click.forEach(fn=>fn({target:{closest:()=>({dataset:{a,...d}})}})),
     input:(id,value)=>events.input.forEach(fn=>fn({target:{id,value}})),navigate:(hash)=>{location.hash='#'+hash;windowEvents.hashchange();},
@@ -185,4 +185,65 @@ test('la práctica libre permite consultar soluciones sin registrar errores', ()
   assert.equal(p.missionResults['a2-delivery'].free.revealed, 3);
   assert.equal(p.missionResults['a2-delivery'].free.first, 0);
   assert.equal(p.missionReviews['a2-delivery'].demonstratedOn, null);
+});
+
+test('la marca, el alcance y los iconos de la PWA corresponden a Xanny', () => {
+  const app = createTest(files);
+  assert.match(app.app.innerHTML, /<h1>Aprende con <em>Xanny<\/em><\/h1>/);
+  assert.match(app.app.innerHTML, /<figcaption>Xanny<\/figcaption>/);
+  assert.doesNotMatch(app.app.innerHTML, /FluentLab/i);
+  const manifest = JSON.parse(files['manifest.webmanifest']);
+  assert.equal(manifest.name, 'Aprende con Xanny');
+  assert.equal(manifest.short_name, 'Xanny');
+  assert.equal(manifest.id, './index.html');
+  assert.equal(manifest.scope, './');
+  assert.deepEqual(manifest.icons.map(icon => icon.sizes), ['192x192', '512x512']);
+});
+
+test('la nube se activa por servicio y las copias excluyen datos locales', () => {
+  const app = createTest(files);
+  assert.equal(app.cloud.available(), false);
+  assert.equal(app.cloud.studyAnalyticsAvailable(), false);
+  assert.equal(app.cloud.visitorAnalyticsAvailable(), false);
+  app.click('nav', {id: 'account'});
+  assert.match(app.app.innerHTML, /Próximamente/);
+  assert.match(app.app.innerHTML, /La sincronización en la nube está desactivada/);
+  const {snapshot, event} = app.StudyProfile;
+  const local = {version: 1, completed: {a1: '2026-01-01'}, missionTimeline: [], drafts: {sample: 'Only here'},
+    missionDrafts: {sample: 'Also here'}, cloudEventsConsent: true, studyAnalyticsConsent: true, unknown: 'Only here'};
+  assert.deepEqual(snapshot(local), {version: 1, completed: local.completed, missionTimeline: []});
+  assert.deepEqual(event('mission_error', 'a2-delivery/0/1'), {kind: 'mission_error', module_id: 'a2-delivery/0/1', score: null});
+  assert.equal(event('mission_error', 'respuesta escrita del alumno'), null);
+  assert.equal(event('mission_skill', 'resolver-problemas', 101), null);
+  assert.equal(event('mission_skill', 'resolver-problemas', 66.7).score, 67);
+  const endpoint = cfg => {
+    const window = {XANNY_CLOUD_CONFIG: cfg};
+    new Function('window', 'location', files['cloud.js'])(window, {protocol: 'https:'});
+    return window.XannyCloud;
+  };
+  const cfg = {accountsEnabled: true, supabaseUrl: 'https://example.com/', privacyPolicyUrl: 'https://example.com/privacy',
+    publishableKey: 'sb_publishable_example'};
+  assert.equal(endpoint(cfg).available(), true);
+  assert.equal(endpoint(cfg).studyAnalyticsAvailable(), false);
+  assert.equal(endpoint({...cfg, studyAnalyticsEnabled: true}).studyAnalyticsAvailable(), true);
+  assert.equal(endpoint({...cfg, privacyPolicyUrl: 'http://example.com/privacy'}).available(), false);
+  assert.equal(endpoint({...cfg, accountsEnabled: false}).available(), false);
+  assert.equal(endpoint({...cfg, publishableKey: 'incorrect-prefix'}).available(), false);
+});
+
+test('el progreso agrupa errores por habilidad y conserva las sesiones recientes', () => {
+  const legacy = {missionErrors: {'a2-delivery/0/1': {times: 4}, 'b1-tech/0/2': {times: 2, resolved: '2026-06-01'}},
+    missionTimeline: [{missionId: 'a2-delivery', mode: 'course', first: 2, assisted: 1, revealed: 0, written: true, date: '2026-06-01'}]};
+  const app = createTest(files, legacy);
+  app.click('nav', {id: 'progress'});
+  for (const label of ['Habilidades con más errores', 'Resolver problemas', '6 errores · 1 decisión pendiente',
+    'Evolución reciente', '2/3 iniciales · 1 con ayuda', 'Respuestas escritas entregadas', 'Transferencia demostrada']) {
+    assert.ok(app.app.innerHTML.includes(label), label);
+  }
+  let timeline = [];
+  for (let i = 0; i < 45; i++) timeline = app.StudyProfile.addMissionSession(timeline, String(i), 'free',
+    {first: 3, assisted: 0, revealed: 0}, false, '2026-06-01');
+  assert.equal(timeline.length, 40);
+  assert.equal(timeline[0].missionId, '5');
+  assert.equal(timeline.at(-1).missionId, '44');
 });

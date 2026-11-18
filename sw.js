@@ -1,11 +1,13 @@
-const RELEASE = '3.1.0';
-const CACHE = 'fluentlab-static-' + RELEASE;
+const RELEASE = '3.2.0';
+const CACHE_PREFIX = 'xanny-english-static-';
+const CACHE = CACHE_PREFIX + RELEASE;
+const PREVIOUS_CACHES = new Set(['fluentlab-static-3.1.0', 'fluentlab-static-v3-20261117']);
 const versioned = name => './' + name + '?v=' + RELEASE;
 const SHELL = './index.html';
 const assets = [
   'styles.css', 'studio.css', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'cloud-config.js', 'cloud.js', 'app.js',
-  'favicon.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js',
+  'favicon.svg', 'xanny.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'
 ];
 const scope = self.registration.scope;
 const assetUrls = new Set(assets.map(name => new URL(versioned(name), scope).href));
@@ -19,7 +21,7 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(
-    keys.filter(key => key.startsWith('fluentlab-static-') && key !== CACHE).map(key => caches.delete(key))
+    keys.filter(key => PREVIOUS_CACHES.has(key) || (key.startsWith(CACHE_PREFIX) && key !== CACHE)).map(key => caches.delete(key))
   )).then(() => self.clients.claim()));
 });
 

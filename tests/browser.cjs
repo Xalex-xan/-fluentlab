@@ -103,8 +103,29 @@ async function run() {
         missionHistory: {'a2-delivery': {plays: 1, totalQuestions: 2, totalFirst: 2, lastVariant: 1}}
       }));
     });
+    const external = [];
+    page.on('request', request => {
+      if (/supabase|cloudflareinsights|cdn\.jsdelivr\.net/.test(request.url())) external.push(request.url());
+    });
     await page.goto(url);
-    assert.match(await page.title(), /FluentLab 3\.1/);
+    await page.getByRole('heading', {name: 'Aprende con Xanny', exact: true}).waitFor();
+    await page.locator('.xanny-hero img').evaluate(image => image.decode());
+    await page.locator('.brand img').evaluate(image => image.decode());
+    const icons = await page.evaluate(async () => {
+      const manifestUrl = document.querySelector('link[rel="manifest"]').href;
+      const manifest = await (await fetch(manifestUrl)).json();
+      return Promise.all(manifest.icons.map(async icon => {
+        const image = new Image();
+        image.src = new URL(icon.src, manifestUrl).href;
+        await image.decode();
+        return [image.naturalWidth, image.naturalHeight];
+      }));
+    });
+    assert.deepEqual(icons, [[192, 192], [512, 512]]);
+    await page.locator('.sidebar .nav [data-id="account"]').click();
+    await page.getByText('La sincronización en la nube está desactivada.').waitFor();
+    assert.ok(await page.getByRole('button', {name: 'Crear cuenta'}).isDisabled());
+    assert.match(await page.title(), /Aprende con Xanny/);
     await verifyNav(page, false);
     await page.locator('.sidebar [data-id="missions"]').click();
     await answerMission(page, 0);
@@ -123,26 +144,35 @@ async function run() {
     await hasContent(page.locator('.transfer-panel'), 'Criterios de autoevaluación');
     await page.locator('[data-a="missionFinish"]').click();
     await hasContent(page.locator('.mission-summary'), 'sin calificación lingüística');
+    await page.locator('.sidebar .nav [data-id="progress"]').click();
+    await hasContent(page.locator('.page'), 'Evolución reciente');
+    await hasContent(page.locator('.progress-ranking'), 'Resolver problemas');
     await page.reload();
     const p = await progress(page);
+    assert.equal(p.missionTimeline.length, 2);
+    assert.equal(p.missionTimeline[1].mode, 'course');
     assert.equal(p.completed['a1-1'], '2026-01-01');
     assert.equal(p.missionResults['a2-delivery'].course.written, 1);
     assert.equal(p.missionDrafts['a2-delivery'], 'Could you check the receipt number?');
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('fluentlab-static-3.1.0')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.2.0')));
     await desktop.setOffline(true);
     await page.reload();
     await page.locator('.page h1').waitFor();
-    assert.match(await page.title(), /FluentLab 3\.1/);
+    assert.match(await page.title(), /Aprende con Xanny/);
     assert.deepEqual(desktopErrors, []);
+    assert.deepEqual(external, []);
     console.log('Escritorio: 14 rutas, reintento, transferencia, curso, progreso legado y recarga sin conexión.');
 
-    const mobile = await browser.newContext({...devices['Pixel 7'], viewport: {width: 360, height: 720}});
+    const mobile = await browser.newContext({...devices['Pixel 7'], viewport: {width: 360, height: 720}, reducedMotion: 'reduce'});
     const phone = await mobile.newPage();
     const mobileErrors = monitor(phone);
     await phone.goto(url);
+    const mascot = phone.locator('.xanny-hero img');
+    await mascot.waitFor({state: 'visible'});
+    assert.equal(await mascot.evaluate(image => getComputedStyle(image).animationName), 'none');
     await verifyNav(phone, true);
     assert.equal(await phone.locator('.mobile-more[open]').count(), 0);
     await phone.locator('.mobile-more summary').click();

@@ -1,9 +1,10 @@
-/* FluentLab 3.1 — práctica y seguimiento de inglés contextual. */
+/* Aprende con Xanny — práctica y progreso de inglés. */
 (()=>{'use strict';
+// Conserva la clave histórica para recuperar el progreso existente en el mismo sitio.
 const KEY='fluentlab_v1';
 let storageOK=true;
 const sections=[['home','Inicio','⌂'],['missions','Misiones reales','◈'],['path','Mi ruta','◈'],['listen','Escuchar','◉'],['speak','Hablar','◌'],['cards','Tarjetas','▣'],['errors','Mis errores','↻'],['progress','Mi progreso','▥'],['account','Mi cuenta','♙'],['grammar','Gramática','✳'],['write','Escribir','✎'],['resources','Biblioteca','▤'],['settings','Ajustes','⚙']];
-const defaults=()=>({version:1,level:'A2',goal:3,accent:'en-US',theme:'dark',xp:0,completed:{},wins:{},listeningDone:{},speakingDone:{},writingDone:{},srs:{},reviewRewarded:{},days:{},drafts:{},placementHistory:[],recentQuestions:{},errorLog:{},lastListen:{},missionHistory:{},missionSkills:{},missionDrafts:{},learningMode:'free',missionVariants:{},missionErrors:{},missionReviews:{},missionResults:{},cloudEventsConsent:false});
+const defaults=()=>({version:1,level:'A2',goal:3,accent:'en-US',theme:'dark',xp:0,completed:{},wins:{},listeningDone:{},speakingDone:{},writingDone:{},srs:{},reviewRewarded:{},days:{},drafts:{},placementHistory:[],recentQuestions:{},errorLog:{},lastListen:{},missionHistory:{},missionSkills:{},missionDrafts:{},learningMode:'free',missionVariants:{},missionErrors:{},missionReviews:{},missionResults:{},studyAnalyticsConsent:false,missionTimeline:[]});
 let progress=load();
 function normalizeProgress(saved) {
   const base = defaults();
@@ -70,12 +71,12 @@ function mobileNav() {
   const links = sections.map(([id, label, icon]) => `<button type="button" class="nav-btn ${ui.page === id ? 'active' : ''}" data-a="nav" data-id="${id}" aria-current="${ui.page === id ? 'page' : 'false'}"><span aria-hidden="true">${icon}</span> ${label}</button>`).join('');
   return `<nav class="mobile-nav" aria-label="Navegación móvil">${sections.filter(([id]) => shortcuts.includes(id)).map(([id, label, icon]) => `<button type="button" class="mobile-shortcut ${ui.page === id ? 'active' : ''}" data-a="nav" data-id="${id}" aria-label="${label}" aria-current="${ui.page === id ? 'page' : 'false'}"><b aria-hidden="true">${icon}</b>${short[id]}</button>`).join('')}<details class="mobile-more"><summary class="mobile-shortcut"><b aria-hidden="true">☰</b>Menú</summary><div class="mobile-menu-panel" aria-label="Todas las secciones">${links}<button type="button" class="nav-btn" data-a="nav" data-id="diagnostic">Diagnóstico</button></div></details></nav>`;
 }
-const meta=()=>`<div class="topbar"><div class="breadcrumb">FLUENTLAB <span class="subtle">/</span> <strong>${sections.find(s=>s[0]===ui.page)?.[1]||'Mi ruta'}</strong></div><div class="toolbar"><span class="pill">🔥 ${streak()} ${streak()===1?'día':'días'}</span><span class="pill">✦ ${progress.xp} XP</span><button class="pill accent" data-a="nav" data-id="settings" aria-label="Cambiar nivel">${esc(progress.level)} <span aria-hidden="true">⌄</span></button></div></div>`;
-function shell(content){document.body.classList.toggle('light',progress.theme==='light');$('app').innerHTML=`<div class="layout"><aside class="sidebar"><div class="brand"><div class="brand-icon">F</div><div><div class="brand-text">Fluent<span>Lab</span></div><span class="brand-sub">Real English Lab</span></div></div><div class="nav-head">Tu espacio</div><nav class="nav" aria-label="Menú principal">${navHtml()}</nav><div class="side-spacer"></div><div class="side-tip"><div class="star">✦</div><strong>Pequeños pasos. Gran progreso.</strong><p>Escucha, responde, equivócate y vuelve a intentarlo. Así se construye fluidez.</p><button class="mini-link button ghost sm" data-a="nav" data-id="diagnostic">Hacer diagnóstico →</button></div></aside><main class="main">${meta()}<div class="page" tabindex="-1">${content}</div><div class="footer">FluentLab · Prototipo educativo independiente · Tu progreso permanece en este dispositivo · <a href="#resources">Fuentes y recursos</a></div></main>${mobileNav()}</div>`}
+const meta=()=>`<div class="topbar"><div class="breadcrumb"><span class="breadcrumb-brand">Aprende con Xanny</span><span class="subtle" aria-hidden="true"> / </span> <strong>${sections.find(s=>s[0]===ui.page)?.[1]||'Mi ruta'}</strong></div><div class="toolbar"><span class="pill">🔥 ${streak()} ${streak()===1?'día':'días'}</span><span class="pill">✦ ${progress.xp} XP</span><button class="pill accent" data-a="nav" data-id="settings" aria-label="Cambiar nivel">${esc(progress.level)} <span aria-hidden="true">⌄</span></button></div></div>`;
+function shell(content){document.body.classList.toggle('light',progress.theme==='light');$('app').innerHTML=`<div class="layout"><aside class="sidebar"><a class="brand" href="#home" aria-label="Aprende con Xanny, inicio"><img class="brand-icon" src="xanny.svg?v=3.2.0" alt="" width="46" height="46"><div class="brand-copy"><span class="brand-text">Aprende con <strong>Xanny</strong></span><span class="brand-sub" lang="en">Xanny English Lab</span></div></a><div class="nav-head">Tu espacio</div><nav class="nav" aria-label="Menú principal">${navHtml()}</nav><div class="side-spacer"></div><div class="side-tip"><div class="star">✦</div><strong>Pequeños pasos. Gran progreso.</strong><p>Escucha, responde, equivócate y vuelve a intentarlo. Así se construye fluidez.</p><button class="mini-link button ghost sm" data-a="nav" data-id="diagnostic">Hacer diagnóstico →</button></div></aside><main class="main">${meta()}<div class="page" tabindex="-1">${content}</div><div class="footer">Aprende con Xanny · <a href="#resources">Fuentes y recursos</a></div></main>${mobileNav()}</div>`}
 function heading(k,title,desc){return `<div class="section-label">${k}</div><h1 class="page-title">${title}</h1><p class="page-desc">${desc}</p>`}
 function progressBar(a,b){return `<div class="progress" role="progressbar" aria-valuenow="${a}" aria-valuemin="0" aria-valuemax="${b}"><span style="width:${pct(a,b)}%"></span></div>`}
 function home(){const finished=count(progress.completed),dayTasks=goalDone(),levelLessons=DATA.lessons.filter(l=>l.level===progress.level),chosen=levelLessons.find(l=>!progress.completed[l.id])||levelLessons[0];const tasks=[['Termina una microlección','Aprende una idea y úsala de inmediato.','path','📗',Object.values(progress.completed).some(v=>v===day())],['Escucha una conversación','Entrena tu oído con una pregunta real.','listen','🎧',Object.values(progress.listeningDone).some(v=>v===day())],['Repasa vocabulario','Recuerda palabras sin mirar primero.','cards','🧠',Object.values(progress.reviewRewarded).some(v=>v===day())]];
-return `${!storageOK?'<div class="notice mb"><strong>Almacenamiento restringido:</strong> este navegador no permite guardar el progreso automáticamente en este contexto. Exporta tus datos desde Ajustes, o abre el sitio publicado mediante HTTPS.</div>':''}<div class="hero"><div><div class="eyebrow">● Tu espacio de inglés</div><h1>Speak more.<br><em>Fear less.</em></h1><p>Un poco de inglés real cada día. Construye vocabulario, entrena el oído y gana confianza para conversar.</p><div class="button-group"><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Continuar mi ruta <span>↗</span></button><button class="button white" data-a="nav" data-id="listen">Practicar escucha ◉</button></div></div><div class="hero-art" aria-hidden="true"><div class="orb"><strong>Hi!</strong></div><div class="orbit-chip one">✦ +10 XP</div><div class="orbit-chip two">🎧 Listen & grow</div></div></div>
+return `${!storageOK?'<div class="notice mb"><strong>Almacenamiento restringido:</strong> este navegador no permite guardar el progreso automáticamente en este contexto. Exporta tus datos desde Ajustes, o abre el sitio publicado mediante HTTPS.</div>':''}<div class="hero"><div><h1>Aprende con <em>Xanny</em></h1><p>Practica inglés para situaciones reales. Entrena tu oído, amplía tu vocabulario y gana confianza para conversar.</p><div class="button-group"><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Continuar mi ruta <span>↗</span></button><button class="button white" data-a="nav" data-id="listen">Practicar escucha ◉</button></div></div><figure class="hero-art xanny-hero"><img src="xanny.svg?v=3.2.0" alt="Gato negro de ojos dorados y pañuelo violeta" width="224" height="224"><figcaption>Xanny</figcaption></figure></div>
 <section class="next-mission home-feature"><div><div class="section-label">⚡ LAB DE SITUACIONES REALES</div><h2>El inglés se aprende usándolo.</h2><p>Entrevistas, reclamos, acuerdos, tecnología, argumentación y casos C1. Una situación alternativa en la siguiente práctica, con pistas y explicaciones.</p></div><button class="button primary" data-a="nav" data-id="missions">Explorar misiones ↗</button></section><div class="home-coach"><div><span class="section-label">✦ TU COACH DE APRENDIZAJE</span><h3>${pendingErrors()?`Tienes ${pendingErrors()} conceptos por reforzar`:'Equivocarte también es avanzar'}</h3><p>Practica, recibe pistas y descubre por qué una respuesta es correcta. Repetir con variaciones te ayuda a comprender.</p></div><button class="button" data-a="nav" data-id="errors">Ver mis errores ↗</button></div><div class="stats"><div class="stat spark"><div class="stat-icon">⚡</div><div class="value">${progress.xp}</div><div class="label">Puntos de práctica</div></div><div class="stat"><div class="stat-icon">🔥</div><div class="value">${streak()}</div><div class="label">Días de racha</div></div><div class="stat"><div class="stat-icon">✅</div><div class="value">${finished}<span class="small subtle">/${DATA.lessons.length}</span></div><div class="label">Lecciones terminadas</div></div><div class="stat"><div class="stat-icon">🧠</div><div class="value">${matureCards()}</div><div class="label">Palabras consolidadas*</div></div></div>
 <div class="grid grid-2 mt"><section class="card"><div class="between mb-sm"><h2 class="section-h" style="margin:0">Misiones de hoy</h2><span class="tag green">${dayTasks}/${progress.goal} objetivo</span></div>${progressBar(Math.min(dayTasks,progress.goal),progress.goal)}<div class="mt">${tasks.map(([title,sub,target,icon,done])=>`<div class="task"><div class="task-icon">${icon}</div><div class="task-main"><h3>${title}</h3><p>${sub}</p></div>${done?'<span class="checkmark" title="Completada">✓</span>':`<button class="button sm" data-a="nav" data-id="${target}">Ir ↗</button>`}</div>`).join('')}</div></section><section class="card"><div class="between mb-sm"><h2 class="section-h" style="margin:0">Tu avance en ${progress.level}</h2><span class="tag blue">MCER</span></div><p class="subtle small">${levelLessons.filter(l=>progress.completed[l.id]).length} de ${levelLessons.length} lecciones completadas</p>${progressBar(levelLessons.filter(l=>progress.completed[l.id]).length,levelLessons.length)}<div class="mt"><div class="between"><div><span class="tag">PRÓXIMA CLASE</span><h3 style="font:800 23px var(--heading);margin:9px 0 5px">${chosen.icon} ${chosen.title}</h3><p class="small subtle" style="margin:0 0 15px">${chosen.objective}</p></div></div><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Empezar lección ↗</button></div><div class="divider"></div><div class="between"><span class="small subtle">¿No sabes tu nivel?</span><button class="button ghost sm" data-a="nav" data-id="diagnostic">Prueba orientativa →</button></div></section></div>
 <div class="grid grid-3 mt"><div class="study-box"><span style="font-size:25px">🎧</span><h3>Entrena el oído</h3><p>Escucha dos veces, identifica la idea principal y luego revisa el texto.</p><button class="button ghost sm mt" data-a="nav" data-id="listen">Ir a listening ↗</button></div><div class="study-box"><span style="font-size:25px">🎤</span><h3>Habla sin miedo</h3><p>Escucha frases, repítelas y compara lo que reconoce el navegador.</p><button class="button ghost sm mt" data-a="nav" data-id="speak">Practicar speaking ↗</button></div><div class="study-box"><span style="font-size:25px">✍️</span><h3>Pasa de entender a crear</h3><p>Escribe textos cortos con sugerencias básicas para corregirte.</p><button class="button ghost sm mt" data-a="nav" data-id="write">Escribir ↗</button></div></div><p class="note mt">*Palabras consolidadas = tarjetas cuyo intervalo de repaso alcanza 7 días; no es una certificación de dominio.</p>`}
@@ -89,7 +90,7 @@ function rememberError(l,q){const key=l.id+'/'+q.id;const x=progress.errorLog[ke
 function repairError(l,q){const key=l.id+'/'+q.id;const entry=progress.errorLog[key];if(entry){entry.resolved=day();save()}}
 function newListenQuiz(item){const orig={question:item.question,options:item.options,answer:item.answer,keyword:item.keyword};const alt=typeof FLUENTLAB_LISTEN_EXTRA!=='undefined'?FLUENTLAB_LISTEN_EXTRA[item.id]:null;const variants=[orig];if(alt)variants.push({question:alt[0],options:alt[1],answer:alt[2],keyword:alt[3]});const last=progress.lastListen[item.id];const possible=variants.map((_,i)=>i).filter(i=>i!==last);const index=possible.length?possible[Math.floor(Math.random()*possible.length)]:0;progress.lastListen[item.id]=index;save();const q=variants[index];const order=shuffle(q.options.map((_,i)=>i));return {...q,options:order.map(i=>q.options[i]),answer:order.indexOf(q.answer)}}
 function switchListen(ix, update = true){ui.listenIndex=ix;ui.listenChoice=null;ui.listenChecked=false;ui.listenAttempts=0;ui.listenWrong=[];ui.listenQuiz=newListenQuiz(DATA.listening[ix]);ui.showTranscript=false;if(update)render()}
-function openLesson(id,focusId){const l=DATA.lessons.find(l=>l.id===id);if(!l)return;ui.lesson={id,index:0,selected:null,checked:false,attempts:0,wrongOptions:[],feedback:'',score:0,firstTry:0,responses:[],items:prepareSession(l,focusId)};ui.page='lesson';location.hash='lesson';render();window.scrollTo(0,0)}
+function openLesson(id,focusId){const l=DATA.lessons.find(l=>l.id===id);if(!l)return;recordCloudEvent('lesson_started',id);ui.lesson={id,index:0,selected:null,checked:false,attempts:0,wrongOptions:[],feedback:'',score:0,firstTry:0,responses:[],items:prepareSession(l,focusId)};ui.page='lesson';location.hash='lesson';render();window.scrollTo(0,0)}
 
 function lesson(){
 const s=ui.lesson;if(!s)return '<div class="card empty"><h3>Elige una lección</h3><button class="button primary" data-a="nav" data-id="path">Ver mi ruta</button></div>';
@@ -116,7 +117,7 @@ function resources(){let types=['Todos','Escucha','Gramática','Pronunciación',
 function settings(){return heading('CONFIGURACIÓN','Tu experiencia, a tu ritmo','Personaliza la dificultad, el audio y tus datos. El progreso se guarda en tu navegador.')+missionModeControls()+`<div class="grid grid-2"><section class="card"><h2 class="section-h">Preferencias</h2><div class="setting-line"><div><h3>Nivel de estudio</h3><p>Para priorizar tu práctica inicial.</p></div><select class="select" id="settingLevel">${['A1','A2','B1','B2'].map(v=>`<option ${progress.level===v?'selected':''}>${v}</option>`).join('')}</select></div><div class="setting-line"><div><h3>Objetivo diario</h3><p>Número sugerido de actividades.</p></div><select class="select" id="settingGoal">${[1,2,3].map(v=>`<option value="${v}" ${progress.goal===v?'selected':''}>${v} ${v===1?'actividad':'actividades'}</option>`).join('')}</select></div><div class="setting-line"><div><h3>Variante de voz</h3><p>Depende de las voces instaladas.</p></div><select class="select" id="settingAccent"><option value="en-US" ${progress.accent==='en-US'?'selected':''}>🇺🇸 Americano</option><option value="en-GB" ${progress.accent==='en-GB'?'selected':''}>🇬🇧 Británico</option></select></div><div class="setting-line"><div><h3>Apariencia</h3><p>Claro u oscuro.</p></div><select class="select" id="settingTheme"><option value="dark" ${progress.theme==='dark'?'selected':''}>Oscuro</option><option value="light" ${progress.theme==='light'?'selected':''}>Claro</option></select></div><div class="mt"><button class="button" data-a="speakAudio" data-text="Good morning! It's a great day to practise English.">🔊 Probar voz</button></div></section><section class="card"><h2 class="section-h">Tus datos</h2>${!storageOK?'<div class="notice mb"><strong>Guardado local bloqueado:</strong> exporta manualmente un respaldo después de estudiar.</div>':''}<p class="small subtle">Tus respuestas no se suben a ningún servidor de FluentLab. Se guardan con almacenamiento local en este navegador; pueden perderse al borrar sus datos.</p><div class="button-group mt"><button class="button primary" data-a="exportData">⇩ Exportar progreso (.json)</button><button class="button" data-a="importTrigger">⇧ Importar copia</button></div><input type="file" id="importFile" accept="application/json,.json" hidden><div class="divider"></div><h3 class="section-h" style="font-size:18px">Empezar desde cero</h3><p class="small subtle">Esta acción borra tu progreso, tarjetas y borradores en este dispositivo.</p><button class="button warn" data-a="resetData">${ui.resetArmed?'¿Confirmar borrado definitivo?':'Borrar todo mi progreso'}</button><div class="divider"></div><h3 class="section-h" style="font-size:18px">Compatibilidad</h3><p class="small subtle">✓ Funciona sin cuentas ni pagos.<br>✓ Lecciones, tarjetas y ejercicios sin conexión tras descargar la web.<br>◉ El audio necesita voces disponibles en el navegador.<br>◉ Reconocimiento de voz sujeto a permisos, soporte y conexión según navegador.<br>◉ No incluye IA conversacional en tiempo real.</p></section></div>`}
 function diagnostic(){const d=ui.diagnostic;if(!d)return heading('EVALUACIÓN INICIAL','¿Desde dónde empezar?','Prueba rápida orientativa de 12 preguntas, principalmente de gramática. No mide por completo tu comprensión oral, conversación ni tu nivel oficial.')+`<div class="card" style="max-width:750px;margin:auto"><div class="section-label">12 PREGUNTAS · 4 NIVELES</div><h2 class="section-h">Conoce un punto de partida</h2><p class="subtle">Al terminar recibirás una sugerencia de nivel. El resultado no equivale a un examen certificado CEFR/MCER.</p><div class="timeline mt">${['A1','A2','B1','B2'].map(x=>`<div class="step"><h4>${x}</h4><p>3 preguntas</p></div>`).join('')}</div><button class="button primary mt" data-a="startDiagnostic">Empezar prueba →</button></div>`;if(d.index>=DATA.placement.length){let byLevel={};['A1','A2','B1','B2'].forEach(l=>{let ids=DATA.placement.map((q,i)=>q[3]===l?i:-1).filter(i=>i>=0);byLevel[l]={correct:ids.filter(i=>d.answers[i]===DATA.placement[i][2]).length,total:ids.length}});const total=Object.values(byLevel).reduce((s,x)=>s+x.correct,0);let suggestion=total>=10?'B2':total>=7?'B1':total>=4?'A2':'A1';return heading('RESULTADO ORIENTATIVO','Tu punto de partida sugerido','Este minitest evalúa estructuras escritas, no todas las competencias del idioma.')+`<div class="card" style="max-width:720px;margin:auto"><div class="section-label">RESULTADO</div><div style="font:900 68px var(--heading);color:var(--accent)">${suggestion}</div><p>Acertaste <strong>${total}/${DATA.placement.length}</strong> preguntas. Te sugiero empezar por el nivel <strong>${suggestion}</strong> y ajustar según la dificultad que encuentres.</p><div class="divider"></div>${Object.entries(byLevel).map(([l,r])=>`<div class="between mb-sm"><strong>${l}</strong><span>${r.correct}/${r.total}</span></div>${progressBar(r.correct,r.total)}<div style="height:12px"></div>`).join('')}<div class="button-group mt"><button class="button primary" data-a="adoptLevel" data-id="${suggestion}">Empezar en ${suggestion}</button><button class="button" data-a="startDiagnostic">Repetir prueba</button></div><p class="note mt">La recomendación es una heurística para comenzar. Puedes cambiar el nivel en Ajustes.</p></div>`}
 const q=DATA.placement[d.index];return heading('PRUEBA ORIENTATIVA','Una pregunta a la vez','Responde sin buscar la solución para obtener una sugerencia más útil.')+`<section class="card" style="max-width:720px;margin:auto"><div class="between"><span class="section-label">PREGUNTA ${d.index+1} DE ${DATA.placement.length}</span><span class="tag">${q[3]}</span></div>${progressBar(d.index,DATA.placement.length)}<h2 class="quiz-title mt">${q[0]}</h2><div class="option-list">${q[1].map((v,i)=>`<button class="option ${d.selected===i?'selected':''}" data-a="diagnosticOption" data-index="${i}"><span class="letter">${String.fromCharCode(65+i)}</span>${esc(v)}</button>`).join('')}</div><button class="button primary block mt" data-a="diagnosticNext" ${d.selected==null?'disabled':''}>${d.index===DATA.placement.length-1?'Ver resultado':'Siguiente pregunta'} →</button></section>`}
-/* FluentLab 3.0 · casos, análisis de progreso y conexión de alumnos opcional */
+/* Misiones y seguimiento del aprendizaje. */
 const missionCount=()=>Object.values(progress.missionHistory||{}).reduce((n,m)=>n+(m.plays||0),0);
 const missionAccuracy=()=>{const vals=Object.values(progress.missionHistory||{});const qs=vals.reduce((n,m)=>n+(m.totalQuestions||0),0);return qs?Math.round(100*vals.reduce((n,m)=>n+(m.totalFirst||0),0)/qs):null};
 function recommendMission(){const current=MISSIONS.filter(m=>m.level===progress.level);const pool=current.length?current:MISSIONS.filter(m=>m.level==='B1');return pool.slice().sort((a,b)=>(progress.missionHistory[a.id]?.plays||0)-(progress.missionHistory[b.id]?.plays||0))[0]||MISSIONS[0]}
@@ -177,6 +178,7 @@ function openMission(id) {
   const questions = mission.variants[variant].questions;
   progress.missionVariants[id] = variant;
   save();
+  recordCloudEvent('mission_started', id);
   ui.mission = {
     id, variant, index: 0, mode: AdaptiveLearning.mode(progress.learningMode),
     orders: questions.map(q => shuffle(q.choices.map((_, i) => i))),
@@ -217,6 +219,7 @@ function missionCheck(reveal = false) {
     s.wrong.push(chosen);
     if (s.wrong.length === 1) {
       AdaptiveLearning.recordError(progress.missionErrors, key, day());
+      recordCloudEvent('mission_error', key);
       s.feedback = {kind: 'hint', message: 'Prueba una vez más', detail: q.details[chosen], hint: q.hint};
       s.selected = null;
     } else {
@@ -277,6 +280,7 @@ function finishMission() {
   skill.questions += total;
   progress.missionSkills[m.skill] = skill;
   AdaptiveLearning.recordCompletion(progress.missionResults, m.id, s.mode, results, writingSubmitted, today);
+  progress.missionTimeline = StudyProfile.addMissionSession(progress.missionTimeline, m.id, s.mode, results, writingSubmitted, today);
   progress.missionReviews[m.id] = AdaptiveLearning.schedule(progress.missionReviews[m.id], {
     first: results.first, total, variant: s.variant
   }, today, plusDays);
@@ -286,6 +290,7 @@ function finishMission() {
   s.stage = 'done';
   activity(old.plays ? 8 : 24);
   recordCloudEvent('mission_completed', m.id, accuracy);
+  recordCloudEvent('mission_skill', slug(m.skill).replace(/[^a-z0-9]+/g, '-'), accuracy);
   render();
   focusPage();
 }
@@ -315,23 +320,193 @@ function mission() {
   const feedback = s.feedback ? `<div class="mission-feedback ${s.feedback.kind}" role="status" tabindex="-1"><strong>${esc(s.feedback.message)}</strong><p>${esc(s.feedback.detail)}</p>${s.feedback.hint ? `<p><strong>Pista.</strong> ${esc(s.feedback.hint)}</p>` : explainAlternatives(q, s.wrong)}</div>` : '';
   return nav + `<div class="mission-progress"><span>DECISIÓN ${s.index + 1} DE ${total}</span>${q.context ? '<strong>TRANSFERENCIA</strong>' : ''}</div><div class="case-layout"><section class="dialogue-panel"><span class="section-label">${q.context ? 'NUEVO CONTEXTO' : 'EL CONTEXTO'}</span><p class="context-description">${esc(q.context || v.context)}</p><div class="dialogue-bubble"><span>Tu objetivo</span><p>${esc(m.goal)}</p></div></section><section class="challenge-panel"><h2 tabindex="-1">${esc(q.prompt)}</h2>${s.solved ? '' : `<div class="mission-answers" role="group" aria-label="Opciones de respuesta">${options}</div>`}${feedback}<button class="button primary block mt" ${(!s.solved && s.selected === null) ? 'disabled' : ''} data-a="${s.solved ? 'missionNext' : 'missionCheck'}">${s.solved ? (s.index === total - 1 ? 'Ir a la práctica escrita →' : 'Siguiente decisión →') : 'Comprobar respuesta'}</button>${!s.solved && s.mode === 'free' ? '<button class="button ghost block mt" data-a="missionReveal">Ver solución sin responder</button>' : ''}</section></div>`;
 }
-function learningProgress(){const h=progress.missionHistory||{},plays=missionCount(),rate=missionAccuracy(),skills=Object.entries(progress.missionSkills||{}).sort((a,b)=>b[1].questions-a[1].questions);const latest=Object.keys(h).sort((a,b)=>(h[b].lastDate||'').localeCompare(h[a].lastDate||''));return heading('TU MAPA DE COMPETENCIAS','Tu progreso de aprendizaje','Consulta la precisión inicial, la ayuda utilizada y el resultado de los repasos.')+adaptiveProgress()+`<div class="stats progress-stats"><div class="stat"><div class="stat-icon">🧭</div><div class="value">${plays}</div><div class="label">Misiones practicadas</div></div><div class="stat"><div class="stat-icon">🎯</div><div class="value">${rate===null?'—':rate+'%'}</div><div class="label">Aciertos al primer intento</div></div><div class="stat"><div class="stat-icon">📝</div><div class="value">${Object.keys(h).length}/${MISSIONS.length}</div><div class="label">Escenarios diferentes</div></div><div class="stat"><div class="stat-icon">🧠</div><div class="value">${pendingErrors()}</div><div class="label">Errores pendientes</div></div></div><div class="grid grid-2 mt"><section class="card"><h2 class="section-h">Fortalezas por habilidad</h2><p class="subtle">Porcentaje real de decisiones acertadas antes de recibir pistas.</p>${skills.length?skills.map(([skill,v])=>`<div class="skill-row"><div class="between"><strong>${esc(skill)}</strong><span>${Math.round(100*v.first/v.questions)}% · ${v.questions} decisiones</span></div>${progressBar(v.first,v.questions)}</div>`).join(''):'<div class="empty-progress">Completa una misión para empezar a ver datos de tus habilidades.</div>'}<div class="info-note">No confundas 100% en pocos ejercicios con un dominio certificado. Repite con nuevos contextos.</div></section><section class="card"><h2 class="section-h">Tu historial reciente</h2>${latest.length?latest.slice(0,8).map(id=>{const m=MISSIONS.find(m=>m.id===id),v=h[id];return `<div class="activity-row"><span>${m?.icon||'📘'} <strong>${esc(m?.title||id)}</strong></span><span>${esc(v.lastAccuracy)}% · ${esc(v.lastDate)}</span></div>`}).join(''):'<p>Aún no hay misiones completadas.</p>'}<button class="button ghost mt" data-a="nav" data-id="missions">Practicar más casos ↗</button></section></div><div class="card mt"><h2 class="section-h">Historial acumulado</h2><p>Los totales y porcentajes históricos incluyen las misiones de FluentLab 3.0. El desglose por modalidad comienza con FluentLab 3.1.</p></div>`}
-function recordCloudEvent(type,id,score){if(!progress.cloudEventsConsent||!window.FluentCloud?.available())return;window.FluentCloud.track(type,id,score).catch(()=>{});}
-async function refreshCloudUser(){if(!window.FluentCloud?.available()){ui.cloudUser=null;ui.cloudNotice='El propietario todavía no ha conectado un servicio de alumnos.';if(ui.page==='account')render();return}ui.cloudBusy=true;if(ui.page==='account')render();try{ui.cloudUser=await FluentCloud.currentUser();ui.cloudNotice=ui.cloudUser?'Sesión iniciada. Puedes guardar una copia del progreso o ver métricas si eres administrador.':'Puedes entrar mediante un enlace que recibirás por correo.';if(ui.cloudUser&&new URLSearchParams(location.search).has('auth'))history.replaceState(null,'',location.pathname+'#account');}catch(e){ui.cloudNotice='No fue posible verificar la sesión: '+e.message;}finally{ui.cloudBusy=false;if(ui.page==='account')render()}}
-async function cloudLogin(){if(!FluentCloud?.available()){toast('Primero se necesita configurar Supabase.');return}const email=($('accountEmail')?.value||'').trim(),consent=$('accountConsent')?.checked,adult=$('accountAdult')?.checked;const policy=window.FLUENTLAB_CLOUD_CONFIG?.privacyPolicyUrl;if(!policy||!/^https:\/\//.test(policy)){toast('Primero hay que publicar la política de privacidad en cloud-config.js.');return}if(!adult){toast('Por ahora solo se habilita el registro de personas mayores de edad.');return}if(!/^\S+@\S+\.\S+$/.test(email)){toast('Escribe un correo válido.');return}if(!consent){toast('Necesitas aceptar el tratamiento de datos antes de registrar una cuenta.');return}ui.cloudBusy=true;ui.cloudNotice='Enviando enlace…';render();try{await FluentCloud.sendLogin(email);ui.cloudNotice='Revisa tu correo y abre el enlace de acceso. No necesitas contraseña.'}catch(e){ui.cloudNotice='No se pudo enviar el enlace: '+e.message}finally{ui.cloudBusy=false;render()}}
-async function cloudSave(){if(!ui.cloudUser){toast('Inicia sesión antes de sincronizar.');return}const nickname=($('accountNickname')?.value||'Estudiante').trim().slice(0,60)||'Estudiante';const {drafts,missionDrafts,...snapshot}=progress;ui.cloudBusy=true;render();try{await FluentCloud.saveProfile({nickname,level:progress.level,snapshot});ui.cloudNotice='Copia del progreso guardada en tu cuenta. No se enviaron escritos ni borradores.'}catch(e){ui.cloudNotice='Error al guardar en la nube: '+e.message}finally{ui.cloudBusy=false;render()}}
-async function cloudRestore(){if(!ui.cloudUser){toast('Inicia sesión primero.');return}if(!confirm('Esto reemplazará tus progresos de estudio locales por la última copia en la nube. ¿Continuar?'))return;ui.cloudBusy=true;render();try{const remote=await FluentCloud.readProfile();if(!remote?.snapshot||typeof remote.snapshot!=='object')throw Error('No se encontró una copia en la nube.');const incoming=remote.snapshot;progress=normalizeProgress({...progress,...incoming,drafts:progress.drafts,missionDrafts:progress.missionDrafts});save();ui.cloudNotice='Recuperamos la copia de tu cuenta. Tus textos locales permanecen sin cambios.'}catch(e){ui.cloudNotice='No se pudo recuperar la copia: '+e.message}finally{ui.cloudBusy=false;render()}}
-async function cloudLogout(){ui.cloudBusy=true;render();try{await FluentCloud.logout();ui.cloudUser=null;ui.teacherStats=null;ui.teacherRoster=null;ui.cloudNotice='Cerraste sesión. El progreso local sigue disponible.'}catch(e){ui.cloudNotice='Error al cerrar sesión: '+e.message}finally{ui.cloudBusy=false;render()}}
-async function cloudTeacher(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherStats=await FluentCloud.teacherSummary();ui.cloudNotice='Estadísticas del proyecto consultadas con permisos de administrador.'}catch(e){ui.teacherStats=null;ui.cloudNotice='Panel no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
-async function cloudRoster(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherRoster=await FluentCloud.teacherRoster();ui.cloudNotice='Listado de alumnos guardado y consultado con permisos de administrador.'}catch(e){ui.teacherRoster=null;ui.cloudNotice='Listado no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
-function account(){const configured=!!window.FluentCloud?.available(),user=ui.cloudUser,ss=ui.teacherStats;return heading('CUENTAS · ACADEMIA','Aprender juntos, con privacidad','FluentLab funciona sin registrarse. Las cuentas, estadísticas del propietario y el respaldo en la nube requieren una configuración adicional.')+`<div class="grid grid-2"><section class="card"><span class="section-label">CUENTA DE ESTUDIANTE</span><h2 class="section-h">${user?'Tu cuenta está conectada':'Iniciar sesión por correo'}</h2>${!configured?`<div class="info-note">Modo independiente activo. El administrador debe añadir las credenciales públicas de Supabase en cloud-config.js y ejecutar supabase_setup.sql. Ningún correo se recopila todavía.</div>`:user?`<p>Sesión de <strong>${esc(user.email||'alumno')}</strong>. Puedes respaldar tus lecciones y misiones.</p><label class="label-input" for="accountNickname">Alias visible</label><input id="accountNickname" class="account-input" maxlength="60" value="${esc(ui.cloudProfile?.nickname||'Estudiante')}" placeholder="Nombre o alias"/><div class="button-group mt"><button class="button primary" data-a="cloudSave" ${ui.cloudBusy?'disabled':''}>Guardar mi progreso</button><button class="button ghost" data-a="cloudRestore" ${ui.cloudBusy?'disabled':''}>Restaurar copia</button></div><button class="button ghost mt" data-a="cloudLogout">Cerrar sesión</button>`:`<label class="label-input" for="accountEmail">Correo electrónico</label><input id="accountEmail" class="account-input" type="email" autocomplete="email" placeholder="nombre@correo.com"/><label class="consent-row"><input type="checkbox" id="accountConsent"/> <span>Acepto el uso de mi correo para iniciar sesión y del progreso que elija sincronizar. Entiendo que el administrador podrá consultar mi alias, nivel y actividad agregada, si la registro.</span></label><label class="consent-row"><input type="checkbox" id="accountAdult"/> <span>Declaro que soy mayor de 18 años. El registro para menores todavía no está habilitado.</span></label>${window.FLUENTLAB_CLOUD_CONFIG?.privacyPolicyUrl?`<p><a href="${esc(window.FLUENTLAB_CLOUD_CONFIG.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">Leer política de privacidad ↗</a></p>`:`<p class="info-note">Antes de habilitar registro, el propietario debe añadir la URL HTTPS de su política de privacidad en cloud-config.js.</p>`}<button class="button primary mt" data-a="cloudLogin" ${ui.cloudBusy?'disabled':''}>Enviar enlace de acceso</button>`}${ui.cloudNotice?`<div class="info-note mt" role="status">${esc(ui.cloudNotice)}</div>`:''}</section><section class="card"><span class="section-label">MÉTRICAS Y VISITAS</span><h2 class="section-h">Cómo sabrás quién utiliza la web</h2><div class="activity-row"><span>Visitas sin registro</span><strong>${window.FluentCloud?.hasAnalytics()?'Integración Cloudflare activada':'No configurado'}</strong></div><div class="activity-row"><span>Cuentas de alumnos</span><strong>${configured?'Sistema listo para conectar':'No configurado'}</strong></div><p class="subtle mt">Cloudflare Web Analytics sirve para visitantes y páginas vistas agregadas. Supabase sirve para cuentas verificadas y actividad de alumnos; son métricas diferentes.</p><div class="info-note">Sin herramientas externas no es posible conocer los visitantes de todos los dispositivos desde GitHub Pages. El almacenamiento local solo registra a la persona que usa este navegador.</div><label class="consent-row mt"><input id="cloudEventConsent" type="checkbox" ${progress.cloudEventsConsent?'checked':''} ${!configured?'disabled':''}/> <span>Permitir guardar en mi cuenta los módulos completados, sus fechas y el porcentaje de aciertos. No se envían mis textos.</span></label>${user?`<div class="button-group mt"><button class="button ghost" data-a="cloudTeacher" ${ui.cloudBusy?'disabled':''}>Resumen administrativo</button><button class="button ghost" data-a="cloudRoster" ${ui.cloudBusy?'disabled':''}>Listado de alumnos</button></div>`:''}</section></div>${Array.isArray(ui.teacherRoster)?`<section class="card mt"><h2 class="section-h">Alumnos con perfil guardado · hasta 200</h2><p class="subtle">Los alias y niveles son información voluntaria. No se muestran correos ni escritos.</p>${ui.teacherRoster.length?ui.teacherRoster.map(r=>`<div class="activity-row"><span><strong>${esc(r.alias)}</strong> · ${esc(r.level)}</span><span>${Number(r.activities)||0} eventos · ${r.lastActivity?esc(String(r.lastActivity).slice(0,10)):'Sin actividad'}</span></div>`).join(''):'<p>No hay perfiles guardados todavía.</p>'}</section>`:''}${ss?`<section class="card mt"><h2 class="section-h">Resumen del proyecto · acceso autorizado</h2><div class="stats"><div class="stat"><div class="value">${Number(ss.accounts)||0}</div><div class="label">Cuentas registradas</div></div><div class="stat"><div class="value">${Number(ss.profiles)||0}</div><div class="label">Con respaldo de progreso</div></div><div class="stat"><div class="value">${Number(ss.active7d)||0}</div><div class="label">Alumnos activos 7 días*</div></div><div class="stat"><div class="value">${Number(ss.events7d)||0}</div><div class="label">Módulos registrados 7 días</div></div></div><p class="subtle">*Activos = usuarios con al menos un evento registrado (requiere que hayan autorizado el registro). No equivale a visitas.</p></section>`:''}<section class="card mt"><h2 class="section-h">Antes de abrir a alumnos reales</h2><p>Se requiere política de privacidad, autorización informada, revisión de seguridad y pruebas con varios usuarios. Si se aceptan menores, deben aplicarse garantías adicionales y autorización válida de sus representantes.</p></section>`}
+
+function frequentSkills() {
+  const bySkill = new Map();
+  for (const {mission, entry} of missionErrorEntries()) {
+    const errors = Math.max(0, Number(entry.times) || 0);
+    if (!errors) continue;
+    const totals = bySkill.get(mission.skill) || {errors: 0, pending: 0};
+    totals.errors += errors;
+    if (!entry.resolved) totals.pending++;
+    bySkill.set(mission.skill, totals);
+  }
+  const top = [...bySkill.entries()].sort((a, b) => b[1].errors - a[1].errors || a[0].localeCompare(b[0], 'es')).slice(0, 5);
+  return `<section class="card"><h2 class="section-h">Habilidades con más errores</h2>${top.length
+    ? `<ul class="progress-ranking">${top.map(([skill, totals]) => `<li><strong>${esc(skill)}</strong><span>${totals.errors} ${totals.errors === 1 ? 'error' : 'errores'} · ${totals.pending} ${totals.pending === 1 ? 'decisión pendiente' : 'decisiones pendientes'}</span></li>`).join('')}</ul>`
+    : '<p>Cuando una decisión de una misión te cueste, aparecerá aquí la habilidad que practicaste.</p>'}<button class="button ghost sm mt" data-a="nav" data-id="errors">Abrir cuaderno de errores</button></section>`;
+}
+
+function recentEvolution() {
+  const recent = progress.missionTimeline.slice(-6).reverse().flatMap(entry => {
+    const mission = MISSIONS.find(m => m.id === entry?.missionId);
+    if (!mission) return [];
+    const [first, assisted, revealed] = ['first', 'assisted', 'revealed'].map(key => {
+      const value = Number(entry[key]);
+      return Number.isInteger(value) && value >= 0 && value <= 3 ? value : 0;
+    });
+    const total = first + assisted + revealed;
+    if (total !== 3) return [];
+    return [`<li><div class="between wrap"><strong>${esc(mission.title)}</strong><time datetime="${esc(entry.date)}">${esc(entry.date)}</time></div><span class="small subtle">${AdaptiveLearning.modes[AdaptiveLearning.mode(entry.mode)]} · ${first}/${total} iniciales · ${assisted} con ayuda · ${revealed} soluciones</span>${progressBar(first, total)}</li>`];
+  });
+  return `<section class="card"><h2 class="section-h">Evolución reciente</h2><p class="subtle">Aciertos al primer intento por sesión de misión, de la más reciente a la más antigua.</p>${recent.length
+    ? `<ol class="progress-timeline">${recent.join('')}</ol>`
+    : '<p>Tus próximas misiones aparecerán aquí. El historial anterior sigue disponible más abajo.</p>'}</section>`;
+}
+
+function learningProgress() {
+  const history = progress.missionHistory;
+  const plays = missionCount();
+  const rate = missionAccuracy();
+  const skills = Object.entries(progress.missionSkills).filter(([, v]) => Number(v?.questions) > 0)
+    .sort((a, b) => b[1].questions - a[1].questions);
+  const latest = Object.keys(history).filter(id => history[id])
+    .sort((a, b) => String(history[b].lastDate || '').localeCompare(String(history[a].lastDate || '')));
+  return heading('MI PROGRESO', 'Tu progreso de aprendizaje', 'Consulta tus resultados, las habilidades que puedes reforzar y tus próximos repasos.') +
+    `<div class="stats progress-stats"><div class="stat"><div class="value">${plays}</div><div class="label">Misiones finalizadas</div></div><div class="stat"><div class="value">${rate === null ? '—' : rate + '%'}</div><div class="label">Aciertos al primer intento</div></div><div class="stat"><div class="value">${dueMissionReviews().length}</div><div class="label">Repasos pendientes</div></div><div class="stat"><div class="value">${pendingErrors()}</div><div class="label">Errores pendientes</div></div></div><div class="grid grid-2 mt">${recentEvolution()}${frequentSkills()}</div>` +
+    adaptiveProgress() +
+    `<div class="grid grid-2 mt"><section class="card"><h2 class="section-h">Precisión inicial por habilidad</h2>${skills.length ? skills.map(([skill, v]) => `<div class="skill-row"><div class="between"><strong>${esc(skill)}</strong><span>${pct(Number(v.first) || 0, Number(v.questions))}% · ${Number(v.questions)} decisiones</span></div>${progressBar(Number(v.first) || 0, Number(v.questions))}</div>`).join('') : '<p>Completa una misión para empezar a ver datos de tus habilidades.</p>'}</section><section class="card"><h2 class="section-h">Historial de misiones</h2><p class="subtle">Incluye tu actividad anterior al cambio de marca.</p>${latest.length ? latest.slice(0, 8).map(id => {const mission = MISSIONS.find(m => m.id === id), v = history[id];return `<div class="activity-row"><strong>${esc(mission?.title || id)}</strong><span>${esc(v.lastAccuracy)}% · ${esc(v.lastDate)}</span></div>`;}).join('') : '<p>Aún no hay misiones completadas.</p>'}<button class="button ghost mt" data-a="nav" data-id="missions">Practicar misiones ↗</button></section></div>`;
+}
+
+function recordCloudEvent(type, id, score) {
+  if (!progress.studyAnalyticsConsent || !ui.cloudUser || !window.XannyCloud?.studyAnalyticsAvailable()) return;
+  window.XannyCloud.track(type, id, score).catch(() => {});
+}
+
+async function refreshCloudUser() {
+  const cloud = window.XannyCloud;
+  if (!cloud?.available() || ui.cloudBusy) return;
+  ui.cloudBusy = true;
+  if (ui.page === 'account') render();
+  try {
+    ui.cloudUser = await cloud.currentUser();
+    ui.cloudProfile = null;
+    if (ui.cloudUser && new URLSearchParams(location.search).has('auth')) {
+      history.replaceState(null, '', location.pathname + '#account');
+    }
+    if (ui.cloudUser && ui.page === 'account') ui.cloudProfile = await cloud.readProfile();
+    ui.cloudNotice = '';
+  } catch (error) {
+    ui.cloudNotice = 'No se pudo consultar la cuenta o su copia en la nube.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
+  }
+}
+
+async function cloudLogin(register) {
+  const cloud = window.XannyCloud;
+  if (!cloud?.available() || ui.cloudBusy) return;
+  const email = ($('accountEmail')?.value || '').trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    toast('Escribe un correo válido.');
+    return;
+  }
+  if (register && (!$('accountAdult')?.checked || !$('accountConsent')?.checked)) {
+    toast('Confirma la mayoría de edad y acepta la política de privacidad para registrarte.');
+    return;
+  }
+  ui.cloudBusy = true;
+  ui.cloudNotice = 'Enviando enlace…';
+  render();
+  try {
+    await cloud.sendLogin(email, register);
+    ui.cloudNotice = 'Si el correo puede continuar, recibirás un enlace de acceso. Ábrelo en este navegador.';
+  } catch {
+    ui.cloudNotice = 'No se pudo enviar el enlace. Revisa el correo o vuelve a intentarlo.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
+  }
+}
+
+async function cloudSave() {
+  if (!ui.cloudUser || ui.cloudBusy) return;
+  const nickname = ($('accountNickname')?.value || '').trim().slice(0, 60) || 'Estudiante';
+  const snapshot = StudyProfile.snapshot(progress);
+  ui.cloudBusy = true;
+  render();
+  try {
+    ui.cloudProfile = await XannyCloud.saveProfile({nickname, level: progress.level, snapshot});
+    ui.cloudNotice = 'Copia en la nube guardada. Tus borradores siguen en este dispositivo.';
+  } catch {
+    ui.cloudNotice = 'No se pudo guardar la copia en la nube. Tu progreso local sigue disponible.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
+  }
+}
+
+async function cloudRestore() {
+  if (!ui.cloudUser || ui.cloudBusy) return;
+  ui.cloudBusy = true;
+  render();
+  try {
+    const remote = await XannyCloud.readProfile();
+    const snapshot = StudyProfile.snapshot(remote?.snapshot);
+    if (snapshot?.version !== 1 || !snapshot.completed) {
+      ui.cloudNotice = 'La cuenta todavía no tiene una copia compatible.';
+      return;
+    }
+    if (!confirm('¿Quieres reemplazar el progreso de estudio de este navegador con la copia de la nube? Tus borradores seguirán aquí.')) return;
+    progress = normalizeProgress({...progress, ...snapshot});
+    ui.reviewQueue = null;
+    save();
+    ui.cloudProfile = remote;
+    ui.cloudNotice = 'Copia restaurada. Tus borradores siguen en este dispositivo.';
+  } catch {
+    ui.cloudNotice = 'No se pudo restaurar la copia en este momento.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
+  }
+}
+
+async function cloudLogout() {
+  if (!ui.cloudUser || ui.cloudBusy) return;
+  ui.cloudBusy = true;
+  render();
+  try {
+    await XannyCloud.logout();
+    ui.cloudUser = null;
+    ui.cloudProfile = null;
+    ui.teacherStats = null;
+    ui.teacherRoster = null;
+    ui.cloudNotice = 'Sesión cerrada. El progreso local sigue disponible.';
+  } catch {
+    ui.cloudNotice = 'No se pudo cerrar la sesión.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
+  }
+}
+async function cloudTeacher(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherStats=await XannyCloud.teacherSummary();ui.cloudNotice='Estadísticas del proyecto consultadas con permisos de administrador.'}catch(e){ui.teacherStats=null;ui.cloudNotice='Panel no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
+async function cloudRoster(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherRoster=await XannyCloud.teacherRoster();ui.cloudNotice='Listado de alumnos guardado y consultado con permisos de administrador.'}catch(e){ui.teacherRoster=null;ui.cloudNotice='Listado no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
+function account() {
+  const cloud = window.XannyCloud;
+  const configured = Boolean(cloud?.available());
+  const user = ui.cloudUser;
+  const ss = ui.teacherStats;
+  const analytics = Boolean(cloud?.studyAnalyticsAvailable());
+  const disabled = !configured || ui.cloudBusy ? 'disabled' : '';
+  const cloudDate = ui.cloudProfile?.updated_at ? new Date(ui.cloudProfile.updated_at) : null;
+  const lastCopy = cloudDate && Number.isFinite(cloudDate.getTime())
+    ? 'Última copia guardada: ' + cloudDate.toLocaleString('es')
+    : 'Aún no hay una copia en la nube confirmada.';
+  const login = configured ? `<label class="label-input" for="accountEmail">Correo electrónico</label><input id="accountEmail" class="account-input" type="email" autocomplete="email" placeholder="nombre@correo.com" ${disabled}><div class="button-group mt"><button class="button primary" data-a="cloudLogin" ${disabled}>Iniciar sesión</button><button class="button ghost" data-a="cloudRegister" ${disabled}>Crear cuenta</button></div><label class="consent-row mt"><input type="checkbox" id="accountConsent"><span>Para crear una cuenta, acepto el uso de mi correo y del progreso que decida respaldar. <a href="${esc(cloud.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">Política de privacidad</a></span></label><label class="consent-row"><input type="checkbox" id="accountAdult"><span>Declaro que soy mayor de 18 años.</span></label>`
+    : '<p>Próximamente podrás acceder o crear una cuenta mediante un enlace enviado por correo. El servicio de cuentas todavía está desactivado.</p><div class="button-group"><button class="button primary" disabled>Iniciar sesión</button><button class="button ghost" disabled>Crear cuenta</button></div>';
+  const storage = user ? `<p>${esc(lastCopy)}</p><label class="label-input" for="accountNickname">Alias visible para el equipo docente</label><input id="accountNickname" class="account-input" maxlength="60" value="${esc(ui.cloudProfile?.nickname || 'Estudiante')}"><div class="button-group mt"><button class="button primary" data-a="cloudSave" ${disabled}>Guardar copia en la nube</button><button class="button ghost" data-a="cloudRestore" ${disabled}>Restaurar copia</button></div>`
+    : `<p>${configured ? 'Inicia sesión para guardar o restaurar una copia del progreso que tú elijas.' : 'La sincronización en la nube está desactivada.'}</p>`;
+  return heading('MI CUENTA', 'Tu cuenta y tus datos', 'Puedes usar Aprende con Xanny y guardar tu avance en este navegador sin registrarte.') +
+    `<div class="grid grid-2"><section class="card"><h2 class="section-h">Cuenta de estudiante</h2>${user ? `<p>Sesión de <strong>${esc(user.email || 'estudiante')}</strong></p><button class="button ghost" data-a="cloudLogout" ${disabled}>Cerrar sesión</button>` : login}${ui.cloudNotice ? `<div class="info-note mt" role="status">${esc(ui.cloudNotice)}</div>` : ''}</section><section class="card"><h2 class="section-h">Progreso local y copia en la nube</h2><h3>En este navegador</h3><p>${storageOK ? 'Tu avance se guarda automáticamente. Los borradores permanecen en este dispositivo.' : 'El navegador restringe el guardado automático. Puedes exportar tu avance en Ajustes.'}</p><button class="button ghost sm" data-a="nav" data-id="settings">Exportar o importar progreso</button><div class="divider"></div><h3>En la nube</h3>${storage}</section></div><section class="card mt"><h2 class="section-h">Privacidad y actividad</h2><div class="activity-row"><span>Visitas agregadas</span><strong>${cloud?.visitorAnalyticsAvailable() ? 'Activadas' : 'Desactivadas'}</strong></div><div class="activity-row"><span>Analítica de estudio en la nube</span><strong>${analytics ? 'Disponible con tu autorización' : 'Desactivada'}</strong></div><label class="consent-row mt"><input id="studyAnalyticsConsent" type="checkbox" ${progress.studyAnalyticsConsent ? 'checked' : ''} ${analytics && user ? '' : 'disabled'}><span>Permitir el registro de mis inicios de sesión de estudio, misiones terminadas, tipos de error y resultados por habilidad. El registro usa identificadores de actividades y puntuaciones.</span></label>${user ? `<div class="button-group mt"><button class="button ghost" data-a="cloudTeacher" ${disabled}>Resumen administrativo</button><button class="button ghost" data-a="cloudRoster" ${disabled}>Listado de alumnos</button></div>` : ''}</section>${Array.isArray(ui.teacherRoster)?`<section class="card mt"><h2 class="section-h">Alumnos con perfil guardado · hasta 200</h2><p class="subtle">Los alias y niveles son información voluntaria. No se muestran correos ni escritos.</p>${ui.teacherRoster.length?ui.teacherRoster.map(r=>`<div class="activity-row"><span><strong>${esc(r.alias)}</strong> · ${esc(r.level)}</span><span>${Number(r.activities)||0} eventos · ${r.lastActivity?esc(String(r.lastActivity).slice(0,10)):'Sin actividad'}</span></div>`).join(''):'<p>No hay perfiles guardados todavía.</p>'}</section>`:''}${ss?`<section class="card mt"><h2 class="section-h">Resumen del proyecto · acceso autorizado</h2><div class="stats"><div class="stat"><div class="value">${Number(ss.accounts)||0}</div><div class="label">Cuentas registradas</div></div><div class="stat"><div class="value">${Number(ss.profiles)||0}</div><div class="label">Con respaldo de progreso</div></div><div class="stat"><div class="value">${Number(ss.active7d)||0}</div><div class="label">Alumnos activos 7 días*</div></div><div class="stat"><div class="value">${Number(ss.events7d)||0}</div><div class="label">Módulos registrados 7 días</div></div></div><p class="subtle">*Activos = usuarios con al menos un evento registrado (requiere que hayan autorizado el registro). No equivale a visitas.</p></section>`:''}<section class="card mt"><h2 class="section-h">Antes de abrir a alumnos reales</h2><p>Se requiere política de privacidad, autorización informada, revisión de seguridad y pruebas con varios usuarios. Si se aceptan menores, deben aplicarse garantías adicionales y autorización válida de sus representantes.</p></section>`;
+}
 
 function render(){if(!sections.some(s=>s[0]===ui.page)&&!['lesson','mission','diagnostic'].includes(ui.page))ui.page='home';const page={home,missions,mission,progress:learningProgress,account,path,listen,speak,cards,errors,grammar,lesson,write,resources,settings,diagnostic}[ui.page];shell(page());}
 function speakText(text,rate){if(!('speechSynthesis'in window)){toast('Este navegador no ofrece voz sintética. Prueba con Chrome, Edge o Safari.');return}try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text).replace(/\b[A-Za-z]+:\s/g,''));u.lang=progress.accent||'en-US';u.rate=rate||Number(progress.rate||0.9);u.pitch=1;const voices=speechSynthesis.getVoices();const desired=voices.find(v=>v.lang===u.lang)||voices.find(v=>v.lang.startsWith('en'));if(desired)u.voice=desired;u.onerror=e=>{if(e.error!=='canceled'&&e.error!=='interrupted')toast('No se pudo reproducir el audio. Verifica las voces del dispositivo.')};speechSynthesis.speak(u)}catch(e){toast('Error de audio: comprueba las opciones de voz del navegador.')}}
 function compareSpeech(expected,actual){const a=normal(expected).split(' ').filter(Boolean),b=normal(actual).split(' ').filter(Boolean);const dp=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));for(let i=0;i<=a.length;i++)dp[i][0]=i;for(let j=0;j<=b.length;j++)dp[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));const score=Math.round(Math.max(0,1-dp[a.length][b.length]/Math.max(1,a.length,b.length))*100);const rest=[...b],missing=[];for(const w of a){let ix=rest.indexOf(w);if(ix===-1)missing.push(w);else rest.splice(ix,1)}return {score,missing:missing.slice(0,8),message:score>=90?'¡Muy buena coincidencia! Intenta decirlo otra vez sin leer.':score>=70?'Buena base. Repite fijándote en el ritmo y las palabras que faltaron.':'Escucha de nuevo y practica en fragmentos de 3 a 5 palabras.'}}
 function record(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast('Reconocimiento de voz no disponible aquí. Usa el cuadro de texto.');return}if(ui.speaking){try{ui.recognition?.stop()}catch(e){}ui.speaking=false;render();return}try{const r=new SR();ui.recognition=r;r.lang=progress.accent;r.interimResults=false;r.continuous=false;r.maxAlternatives=1;ui.speaking=true;r.onresult=e=>{const t=e.results[0][0].transcript;ui.speakText=t;ui.speakFeedback=null;ui.speaking=false;render();toast('Voz reconocida. Puedes comparar la frase.')};r.onerror=e=>{ui.speaking=false;render();const dict={not:'', 'not-allowed':'Permiso de micrófono denegado. Revisa los permisos del navegador.',network:'El servicio de voz no está disponible. Usa el modo escrito.', 'no-speech':'No se detectó voz. Prueba otra vez.'};toast(dict[e.error]||`No fue posible reconocer la voz (${e.error}).`)};r.onend=()=>{if(ui.speaking){ui.speaking=false;render()}};r.start();render()}catch(e){ui.speaking=false;toast('No se pudo iniciar el micrófono. Usa HTTPS o localhost y revisa permisos.');render()}}
-function downloadData(){try{const blob=new Blob([JSON.stringify({...progress,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`FluentLab-progreso-${day()}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del progreso exportada.')}catch(e){toast('No fue posible exportar el archivo.')}}
-function importData(file){if(!file)return;if(file.size>2_000_000){toast('La copia es demasiado grande (máximo 2 MB).');return}const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(p.version!==1||!['A1','A2','B1','B2'].includes(p.level)||typeof p.xp!=='number'||typeof p.completed!=='object'||!p.completed)throw Error('invalid');progress=normalizeProgress(p);save();ui.reviewQueue=null;toast('Progreso importado correctamente.');navPage('home')}catch(e){toast('Archivo no válido: importa una copia JSON de FluentLab.')}};rd.readAsText(file)}
+function downloadData(){try{const blob=new Blob([JSON.stringify({...progress,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`Aprende-con-Xanny-progreso-${day()}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del progreso exportada.')}catch(e){toast('No fue posible exportar el archivo.')}}
+function importData(file){if(!file)return;if(file.size>2_000_000){toast('La copia es demasiado grande (máximo 2 MB).');return}const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(p.version!==1||!['A1','A2','B1','B2'].includes(p.level)||typeof p.xp!=='number'||typeof p.completed!=='object'||!p.completed)throw Error('invalid');progress=normalizeProgress(p);save();ui.reviewQueue=null;toast('Progreso importado correctamente.');navPage('home')}catch(e){toast('Archivo no válido: importa una copia JSON de tu progreso.')}};rd.readAsText(file)}
 function doReview(rating){const id=ui.reviewQueue?.shift(),v=DATA.vocabulary.find(x=>x.id===id);if(!v)return;const prev=progress.srs[id]||{interval:0,ease:2.4,reps:0};let iv=prev.interval,reps=prev.reps,ease=prev.ease;if(rating==='again'){iv=0;reps=0;ease=Math.max(1.3,ease-.18)}else if(rating==='hard'){iv=1;reps++;ease=Math.max(1.3,ease-.1)}else if(rating==='good'){iv=prev.interval===0?1:Math.max(2,Math.round(prev.interval*ease));reps++}else{iv=prev.interval===0?4:Math.max(4,Math.round(prev.interval*(ease+.4)));reps++;ease+=.1}progress.srs[id]={interval:iv,reps,ease,due:plusDays(iv),last:day()};if(rating!=='again'){ui.reviewSuccess++;awardOnce('reviewRewarded',`${day()}:${id}`,5)}else{activity(0)}ui.reviewCount++;ui.cardFlipped=false;save();render()}
 function checkWriting(){const item=getWriting();const s=$('writingText')?.value||'';progress.drafts[item.id]=s;const f=writingFeedback(s,item);ui.writeFeedback=f;if(f.passes){awardOnce('writingDone',item.id,20);toast('Alcanzaste la extensión orientativa. Guardamos tu actividad de escritura.')}else save();render()}
 function clickAction(e){const el=e.target.closest('[data-a]');if(!el)return;const action=el.dataset.a,id=el.dataset.id,ix=Number(el.dataset.index);switch(action){
@@ -344,7 +519,8 @@ case 'missionReveal':missionCheck(true);break;
 case 'missionNext':missionNext();break;
 case 'missionModel':if(ui.mission?.stage==='transfer'){ui.mission.showModel=!ui.mission.showModel;render();document.querySelector('[data-a="missionModel"]')?.focus()}break;
 case 'missionFinish':finishMission();break;
-case 'cloudLogin':cloudLogin();break;
+case 'cloudLogin':cloudLogin(false);break;
+case 'cloudRegister':cloudLogin(true);break;
 case 'cloudRefresh':refreshCloudUser();break;
 case 'cloudSave':cloudSave();break;
 case 'cloudRestore':cloudRestore();break;
@@ -406,7 +582,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change',e=>{const el=e.target;switch(el.id){
 case 'learningMode':progress.learningMode=AdaptiveLearning.mode(el.value);save();break;
 case 'settingLevel':progress.level=el.value;ui.reviewQueue=null;save();toast('Nivel de referencia actualizado.');render();break;
-case 'cloudEventConsent':progress.cloudEventsConsent=el.checked;save();toast(el.checked?'Registro de actividad de alumnos activado al iniciar sesión.':'Registro de actividad desactivado.');break;
+case 'studyAnalyticsConsent':if(!window.XannyCloud?.studyAnalyticsAvailable()||!ui.cloudUser)return;progress.studyAnalyticsConsent=el.checked;save();toast(el.checked?'Registro de actividad autorizado.':'Registro de actividad desactivado.');break;
 case 'settingGoal':progress.goal=Number(el.value);save();toast('Objetivo actualizado.');break;
 case 'settingAccent':progress.accent=el.value;save();toast('Variante de voz seleccionada.');break;
 case 'settingTheme':progress.theme=el.value;save();render();break;
@@ -419,5 +595,5 @@ default:break}});
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==ui.page){ui.page=h;ui.lesson=null;render()}});
 if('serviceWorker'in navigator&&location.protocol!=='file:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 render();
-if(ui.page==='account')refreshCloudUser();
+if(window.XannyCloud?.available())refreshCloudUser();
 })();

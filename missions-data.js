@@ -1,4 +1,4 @@
-/* FluentLab 3.1 — Casos originales para practicar inglés contextual (no son materiales de terceros). */
+/* Aprende con Xanny — Casos originales para practicar inglés contextual (no son materiales de terceros). */
 const MISSIONS = (() => {
   const Q = (prompt, choices, answer, why, hint, details) => ({prompt,choices,answer,why,hint,details});
   const V = (context, questions) => ({context,questions});

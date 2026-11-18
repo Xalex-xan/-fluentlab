@@ -18,9 +18,7 @@ jobs:
           persist-credentials: false
       - name: Pruebas de lógica y compatibilidad
         run: node --test tests/fluentlab.test.cjs
-      - name: Instalar Chromium de prueba
-        run: |
-          npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
-          npx --no-install playwright install --with-deps chromium
+      - name: Preparar Playwright para Chrome del runner
+        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
       - name: Probar escritorio, móvil y Service Worker
         run: node tests/browser.cjs

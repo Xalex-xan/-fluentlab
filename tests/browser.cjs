@@ -92,7 +92,7 @@ async function run() {
   const url = 'http://127.0.0.1:' + server.address().port + '/-fluentlab/';
   let browser;
   try {
-    browser = await chromium.launch();
+    browser = await chromium.launch({channel: 'chrome'});
     const desktop = await browser.newContext({viewport: {width: 1366, height: 768}});
     const page = await desktop.newPage();
     const desktopErrors = monitor(page);

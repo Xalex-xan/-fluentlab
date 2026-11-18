@@ -1,5 +1,7 @@
 /* Datos de estudio que pueden formar parte de una copia en la nube. */
 const StudyProfile = (() => {
+  // C2 puede añadirse cuando exista contenido y su entrada en study_levels.
+  const levels = ['A1', 'A2', 'B1', 'B2', 'C1'];
   const syncFields = [
     'version', 'level', 'xp', 'completed', 'wins', 'listeningDone', 'speakingDone',
     'writingDone', 'srs', 'reviewRewarded', 'days', 'placementHistory',
@@ -30,5 +32,5 @@ const StudyProfile = (() => {
     return [...timeline.slice(-39), entry];
   }
 
-  return {snapshot, event, addMissionSession};
+  return {levels: Object.freeze(levels), snapshot, event, addMissionSession};
 })();

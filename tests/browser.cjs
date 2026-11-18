@@ -7,7 +7,7 @@ const {chromium, devices} = require('playwright');
 const root = join(__dirname, '..');
 const mime = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png'};
-const sections = ['home','missions','path','listen','speak','cards','errors','progress','account','grammar','write','resources','settings','diagnostic'];
+const sections = ['home','missions','path','listen','speak','cards','errors','progress','account','classroom','grammar','write','resources','settings','diagnostic'];
 
 function serve() {
   return createServer(async (request, response) => {
@@ -158,14 +158,14 @@ async function run() {
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.2.0')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.3.0')));
     await desktop.setOffline(true);
     await page.reload();
     await page.locator('.page h1').waitFor();
     assert.match(await page.title(), /Aprende con Xanny/);
     assert.deepEqual(desktopErrors, []);
     assert.deepEqual(external, []);
-    console.log('Escritorio: 14 rutas, reintento, transferencia, curso, progreso legado y recarga sin conexión.');
+    console.log('Escritorio: 15 rutas, reintento, transferencia, curso, progreso legado y recarga sin conexión.');
 
     const mobile = await browser.newContext({...devices['Pixel 7'], viewport: {width: 360, height: 720}, reducedMotion: 'reduce'});
     const phone = await mobile.newPage();
@@ -184,7 +184,7 @@ async function run() {
     await phone.keyboard.press('Escape');
     assert.equal(await menu.isVisible(), false);
     assert.deepEqual(mobileErrors, []);
-    console.log('Móvil de 360 px: 14 rutas, menú completo, cierre con Escape y sin desbordamiento horizontal.');
+    console.log('Móvil de 360 px: 15 rutas, menú completo, cierre con Escape y sin desbordamiento horizontal.');
   } finally {
     await browser?.close();
     server.close();

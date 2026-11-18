@@ -151,7 +151,7 @@ test('carga todo el catálogo, las rutas y las configuraciones públicas', () =>
   assert.equal(app.DATA.listening.length, 12);
   assert.equal(app.DATA.speaking.length, 16);
   assert.equal(app.DATA.writing.length, 8);
-  const sections = ['home','missions','path','listen','speak','cards','errors','progress','account','grammar','write','resources','settings','diagnostic'];
+  const sections = ['home','missions','path','listen','speak','cards','errors','progress','account','classroom','grammar','write','resources','settings','diagnostic'];
   for (const id of sections) {
     app.click('nav', {id});
     assert.ok(app.app.innerHTML.includes('<h1'), id);
@@ -247,4 +247,23 @@ test('el progreso agrupa errores por habilidad y conserva las sesiones recientes
   assert.equal(timeline.length, 40);
   assert.equal(timeline[0].missionId, '5');
   assert.equal(timeline.at(-1).missionId, '44');
+});
+
+test('C1 conserva sus preferencias y la portada ofrece microlecciones B2', () => {
+  const app = createTest(files, {version: 1, level: 'C1'});
+  assert.match(app.app.innerHTML, /Tu avance en B2/);
+  app.click('nav', {id: 'settings'});
+  assert.match(app.app.innerHTML, /<option selected>C1<\/option>/);
+  app.change('settingLevel', 'C2');
+  app.change('settingLevel', 'C1');
+  assert.equal(app.stored().level, 'C1');
+});
+
+test('el aula requiere configuración independiente y estudiar sin cuenta sigue disponible', () => {
+  const app = createTest(files);
+  assert.equal(app.cloud.classroomAvailable(), false);
+  app.click('nav', {id: 'classroom'});
+  assert.match(app.app.innerHTML, /El aula virtual está desactivada/);
+  app.click('nav', {id: 'missions'});
+  assert.match(app.app.innerHTML, /16 MISIONES/);
 });

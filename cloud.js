@@ -2,20 +2,37 @@
 (() => {
   'use strict';
   const cfg = window.XANNY_CLOUD_CONFIG || {};
-  const httpsUrl = value => {
+  const loopback = hostname => hostname === '127.0.0.1' || hostname === 'localhost';
+  const dev = cfg.developmentMode === true && loopback(location.hostname);
+  const trustedUrl = value => {
     try {
       const url = new URL(value);
-      return url.protocol === 'https:' && !url.username && !url.password ? url : null;
+      if (url.username || url.password) return null;
+      return url.protocol === 'https:' || (dev && url.protocol === 'http:' && loopback(url.hostname)) ? url : null;
     } catch {
       return null;
     }
   };
-  const policy = httpsUrl(cfg.privacyPolicyUrl);
-  const project = httpsUrl(cfg.supabaseUrl);
-  const available = () => cfg.accountsEnabled === true && location.protocol === 'https:' && Boolean(
-    policy && project && project.pathname === '/' && !project.search && !project.hash &&
-    typeof cfg.publishableKey === 'string' && /^sb_publishable_[A-Za-z0-9_-]+$/.test(cfg.publishableKey)
+  const policy = trustedUrl(cfg.privacyPolicyUrl);
+  const project = trustedUrl(cfg.supabaseUrl);
+
+  function validPublicKey() {
+    const key = cfg.publishableKey;
+    if (typeof key !== 'string') return false;
+    if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return true;
+    if (!dev || !loopback(project?.hostname)) return false;
+    try {
+      const payload = key.split('.')[1].replaceAll('-', '+').replaceAll('_', '/');
+      return JSON.parse(atob(payload)).role === 'anon';
+    } catch {
+      return false;
+    }
+  }
+
+  const available = () => cfg.accountsEnabled === true && (location.protocol === 'https:' || dev) && Boolean(
+    policy && project && project.pathname === '/' && !project.search && !project.hash && validPublicKey()
   );
+  const classroomAvailable = () => available() && cfg.classroomEnabled === true;
   const studyAnalyticsAvailable = () => available() && cfg.studyAnalyticsEnabled === true;
   const visitorAnalyticsAvailable = () => cfg.visitorAnalyticsEnabled === true &&
     location.protocol === 'https:' && Boolean(policy && typeof cfg.cloudflareToken === 'string' &&
@@ -56,7 +73,7 @@
 
   async function logout() {
     const db = await connect();
-    const {error} = await db.auth.signOut();
+    const {error} = await db.auth.signOut({scope: 'local'});
     if (error) throw error;
   }
 
@@ -67,15 +84,20 @@
     return {db, user};
   }
 
-  async function saveProfile(profile) {
-    const {db, user} = await authenticated();
-    const snapshot = StudyProfile.snapshot(profile.snapshot);
-    if (!snapshot || snapshot.version !== 1) throw Error('Formato de progreso incompatible.');
-    const {data, error} = await db.from('learning_profiles').upsert({
-      id: user.id, nickname: profile.nickname, level: profile.level, snapshot
-    }, {onConflict: 'id'}).select('nickname,level,updated_at').single();
+
+  async function rpc(name, params) {
+    const {db} = await authenticated();
+    const {data, error} = await db.rpc(name, params);
     if (error) throw error;
     return data;
+  }
+
+  async function saveProfile(profile, expected) {
+    const snapshot = StudyProfile.snapshot(profile.snapshot);
+    if (!snapshot || snapshot.version !== 1) throw Error('Formato de progreso incompatible.');
+    return rpc('xanny_save_progress', {
+      p_alias: profile.nickname, p_level: profile.level, p_snapshot: snapshot, p_expected: expected
+    });
   }
 
   async function readProfile() {
@@ -110,16 +132,44 @@
     return data;
   }
 
-  window.XannyCloud = {
-    available, studyAnalyticsAvailable, visitorAnalyticsAvailable, privacyPolicyUrl: policy?.href,
-    currentUser, sendLogin, logout, saveProfile, readProfile, track, teacherSummary, teacherRoster
-  };
 
-  if (visitorAnalyticsAvailable()) {
+  async function readConsent() {
+    const {db, user} = await authenticated();
+    const {data, error} = await db.from('study_analytics_preferences').select('enabled').eq('user_id', user.id).maybeSingle();
+    if (error) throw error;
+    return data?.enabled === true;
+  }
+
+  async function setConsent(value) {
+    if (value && !studyAnalyticsAvailable()) throw Error('Analítica desactivada.');
+    return rpc('xanny_analytics_consent', {p_enabled: value});
+  }
+
+  let beaconStarted = false;
+  function startAnonymousVisits() {
+    if (beaconStarted || !visitorAnalyticsAvailable()) return;
+    beaconStarted = true;
     const tag = document.createElement('script');
     tag.defer = true;
     tag.src = 'https://static.cloudflareinsights.com/beacon.min.js';
-    tag.setAttribute('data-cf-beacon', JSON.stringify({token: cfg.cloudflareToken}));
+    tag.setAttribute('data-cf-beacon', JSON.stringify({token: cfg.cloudflareToken, spa: false}));
     document.head.append(tag);
   }
+
+  window.XannyCloud = {
+    available, classroomAvailable, studyAnalyticsAvailable, visitorAnalyticsAvailable,
+    privacyPolicyUrl: policy?.href, currentUser, sendLogin, logout, saveProfile, readProfile,
+    track, teacherSummary, teacherRoster, readConsent, setConsent, startAnonymousVisits,
+    classroomContext: () => rpc('xanny_classroom_context'),
+    createGroup: name => rpc('xanny_create_group', {p_name: name}),
+    joinGroup: (code, alias) => rpc('xanny_join_group', {p_code: code, p_alias: alias}),
+    rotateInvite: group => rpc('xanny_rotate_invite', {p_group: group}),
+    assignMission: (group, mission) => rpc('xanny_assign_mission', {p_group: group, p_mission: mission}),
+    classroomReport: group => rpc('xanny_classroom_report', {p_group: group}),
+    submitResult: (assignment, result) => rpc('xanny_submit_result', {
+      p_assignment: assignment, p_attempt: result.attempt, p_mode: result.mode,
+      p_first: result.first, p_assisted: result.assisted, p_revealed: result.revealed,
+      p_written: result.written, p_review_due: result.reviewDue
+    })
+  };
 })();

@@ -2,7 +2,7 @@ name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/aprende-con-xanny]
+    branches: [main, development/xanny-3.3-aula]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,10 @@ jobs:
           sudo -u postgres createdb xanny_verify
           fixtures=$(mktemp -d)
           chmod 755 "$fixtures"
-          install -m 644 supabase_setup.sql "$fixtures/supabase_setup.sql"
+          install -m 644 supabase_setup.sql supabase_aula_33.sql "$fixtures/"
           install -D -m 644 tests/schema.sql "$fixtures/tests/schema.sql"
-          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/schema.sql"
+          install -m 644 tests/aula.sql "$fixtures/tests/aula.sql"
+          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/aula.sql"
   pages:
     if: github.ref == 'refs/heads/main'
     needs: verify
@@ -44,13 +45,58 @@ jobs:
           base=https://xalex-xan.github.io/-fluentlab
           for attempt in {1..18}; do
             if html=$(curl --fail --silent --show-error --max-time 5 "$base/?release=${GITHUB_SHA}&attempt=$attempt") &&
-              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.2.0"* ]]; then
-              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.2.0")
+              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.3.0"* ]]; then
+              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.3.0")
               printf '%s' "$manifest" | node -e "const m = JSON.parse(require('node:fs').readFileSync(0)); if(m.name !== 'Aprende con Xanny' || m.icons.length !== 2) process.exit(1);"
-              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.2.0" > /dev/null
+              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.3.0" > /dev/null
               printf 'Marca, manifest y mascota verificados en GitHub Pages.\n'
               exit 0
             fi
             sleep 8
           done
           exit 1
+
+  auth:
+    if: github.ref == 'refs/heads/development/xanny-3.3-aula'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Preparar pruebas de navegador
+        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 @supabase/supabase-js@2.95.3
+      - name: Iniciar Supabase de desarrollo aislado
+        shell: bash
+        run: |
+          npx --yes supabase@2.75.0 init
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path('supabase/config.toml')
+          config = path.read_text()
+          config = config.replace('http://127.0.0.1:3000', 'http://127.0.0.1:4173')
+          config = config.replace('additional_redirect_urls = ["https://127.0.0.1:3000"]',
+                                  'additional_redirect_urls = ["http://127.0.0.1:4173/**"]')
+          config = config.replace('email_sent = 2', 'email_sent = 40')
+          config = config.replace('enable_confirmations = false', 'enable_confirmations = true', 1)
+          config = re.sub(r'(?m)^(\[(?:studio|realtime|storage|edge_runtime|analytics)\]\n)enabled = true$',
+                          r'\1enabled = false', config)
+          path.write_text(config)
+          PY
+          mkdir -p supabase/migrations
+          cp supabase_setup.sql supabase/migrations/20261117000000_base.sql
+          cp supabase_aula_33.sql supabase/migrations/20261118000000_aula.sql
+          if ! npx --yes supabase@2.75.0 start > "$RUNNER_TEMP/xanny-supabase.log" 2>&1; then
+            sed -n -E '/(failed|Error|ERROR|denied|rate limit)/p' "$RUNNER_TEMP/xanny-supabase.log" | tail -15
+            exit 1
+          fi
+          npx --yes supabase@2.75.0 status -o json > "$RUNNER_TEMP/xanny-supabase.json"
+      - name: Probar correo, dos alumnos, docente y copias entre navegadores
+        shell: bash
+        run: |
+          export XANNY_DEV_API=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").API_URL')
+          export XANNY_DEV_KEY=$(node -p 'const s = require(process.env.RUNNER_TEMP + "/xanny-supabase.json"); s.PUBLISHABLE_KEY || s.ANON_KEY')
+          export XANNY_DEV_DB=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").DB_URL')
+          export XANNY_DEV_MAIL=$(node -p 'const s = require(process.env.RUNNER_TEMP + "/xanny-supabase.json"); s.MAILPIT_URL || s.INBUCKET_URL || "http://127.0.0.1:54324"')
+          node tests/auth.cjs

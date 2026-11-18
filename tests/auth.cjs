@@ -12,6 +12,7 @@ const key = process.env.XANNY_DEV_KEY;
 const db = process.env.XANNY_DEV_DB;
 const mail = process.env.XANNY_DEV_MAIL || 'http://127.0.0.1:54324';
 const sdk = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm';
+const otpResponses = new WeakMap();
 const assets = new Set(['index.html', 'styles.css', 'studio.css', 'data.js', 'question-bank.js',
   'mission-transfer.js', 'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud.js',
   'app.js', 'favicon.svg', 'manifest.webmanifest', 'xanny.svg', 'icon-192.png', 'icon-512.png']);
@@ -68,13 +69,22 @@ async function signIn(page, email, register = false) {
   const previous = new Set((await messages()).map(message => message.ID));
   await page.goto(base + '/#account');
   await page.locator('#accountEmail').waitFor();
+  const adapter = await page.evaluate(async url => {
+    try { return typeof (await import(url)).createClient; }
+    catch (error) { return error.name + ': ' + error.message; }
+  }, sdk);
+  if (adapter !== 'function') throw Error('El SDK de prueba no se pudo cargar: ' + adapter);
   await page.locator('#accountEmail').fill(email);
   if (register) {
     await page.locator('#accountConsent').check();
     await page.locator('#accountAdult').check();
   }
   await page.getByRole('button', {name: register ? 'Crear cuenta' : 'Iniciar sesión', exact: true}).click();
-  await page.getByText('Si el correo puede continuar', {exact: false}).waitFor();
+  const status = page.locator('.page [role="status"]');
+  await status.filter({hasText: /Si el correo puede continuar|No se pudo enviar/}).waitFor();
+  if ((await status.innerText()).includes('No se pudo enviar')) {
+    throw Error('Supabase Auth rechazó el envío de prueba: ' + (otpResponses.get(page) || 'sin respuesta OTP'));
+  }
   await openMail(page, email, previous);
   await page.getByText(email, {exact: true}).waitFor();
 }
@@ -110,6 +120,15 @@ async function browserPage(browser, vendor, faults) {
   const page = await context.newPage();
   page.setDefaultTimeout(20000);
   page.on('pageerror', error => faults.push(error.message));
+  page.on('response', async response => {
+    if (!response.url().endsWith('/auth/v1/otp')) return;
+    let code = '';
+    try {
+      const data = await response.json();
+      if (typeof data.error_code === 'string' && /^[a-z0-9_]{1,80}$/i.test(data.error_code)) code = data.error_code;
+    } catch {}
+    otpResponses.set(page, String(response.status()) + ' ' + code);
+  });
   return page;
 }
 

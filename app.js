@@ -197,16 +197,19 @@ function missionChoice(index) {
   document.querySelector('[data-a="missionChoice"][aria-pressed="true"]')?.focus();
 }
 
-function missionCheck() {
+function missionCheck(reveal = false) {
   const s = ui.mission;
-  if (s?.stage !== 'questions' || s.selected === null || s.solved) return;
+  if (s?.stage !== 'questions' || s.solved || (reveal ? s.mode !== 'free' : s.selected === null)) return;
   const m = MISSIONS.find(m => m.id === s.id);
   const q = m.variants[s.variant].questions[s.index];
   const key = AdaptiveLearning.questionKey(m, s.variant, s.index);
   const chosen = s.selected;
   const correct = chosen === q.answer;
   let outcome;
-  if (correct) {
+  if (reveal) {
+    outcome = 'revealed';
+    s.feedback = {kind: 'hint', message: 'Solución explicada', detail: q.why};
+  } else if (correct) {
     outcome = s.wrong.length ? 'assisted' : 'first';
     if (outcome === 'first') AdaptiveLearning.recordRecovery(progress.missionErrors, key, day());
     s.feedback = {kind: 'right', message: s.wrong.length ? 'Acertaste con la pista' : 'Acertaste al primer intento', detail: q.why};
@@ -310,7 +313,7 @@ function mission() {
   const order = s.orders[s.index];
   const options = order.map((i, display) => `<button type="button" class="mission-option ${s.selected === i ? 'selected' : ''} ${s.wrong.includes(i) ? 'eliminated' : ''} ${s.solved && i === q.answer ? 'solution' : ''}" aria-pressed="${s.selected === i}" ${s.solved || s.wrong.includes(i) ? 'disabled' : ''} data-a="missionChoice" data-index="${i}"><span class="opt-letter" aria-hidden="true">${String.fromCharCode(65 + display)}</span><span>${esc(q.choices[i])}</span></button>`).join('');
   const feedback = s.feedback ? `<div class="mission-feedback ${s.feedback.kind}" role="status" tabindex="-1"><strong>${esc(s.feedback.message)}</strong><p>${esc(s.feedback.detail)}</p>${s.feedback.hint ? `<p><strong>Pista.</strong> ${esc(s.feedback.hint)}</p>` : explainAlternatives(q, s.wrong)}</div>` : '';
-  return nav + `<div class="mission-progress"><span>DECISIÓN ${s.index + 1} DE ${total}</span>${q.context ? '<strong>TRANSFERENCIA</strong>' : ''}</div><div class="case-layout"><section class="dialogue-panel"><span class="section-label">${q.context ? 'NUEVO CONTEXTO' : 'EL CONTEXTO'}</span><p class="context-description">${esc(q.context || v.context)}</p><div class="dialogue-bubble"><span>Tu objetivo</span><p>${esc(m.goal)}</p></div></section><section class="challenge-panel"><h2 tabindex="-1">${esc(q.prompt)}</h2>${s.solved ? '' : `<div class="mission-answers" role="group" aria-label="Opciones de respuesta">${options}</div>`}${feedback}<button class="button primary block mt" ${(!s.solved && s.selected === null) ? 'disabled' : ''} data-a="${s.solved ? 'missionNext' : 'missionCheck'}">${s.solved ? (s.index === total - 1 ? 'Ir a la práctica escrita →' : 'Siguiente decisión →') : 'Comprobar respuesta'}</button></section></div>`;
+  return nav + `<div class="mission-progress"><span>DECISIÓN ${s.index + 1} DE ${total}</span>${q.context ? '<strong>TRANSFERENCIA</strong>' : ''}</div><div class="case-layout"><section class="dialogue-panel"><span class="section-label">${q.context ? 'NUEVO CONTEXTO' : 'EL CONTEXTO'}</span><p class="context-description">${esc(q.context || v.context)}</p><div class="dialogue-bubble"><span>Tu objetivo</span><p>${esc(m.goal)}</p></div></section><section class="challenge-panel"><h2 tabindex="-1">${esc(q.prompt)}</h2>${s.solved ? '' : `<div class="mission-answers" role="group" aria-label="Opciones de respuesta">${options}</div>`}${feedback}<button class="button primary block mt" ${(!s.solved && s.selected === null) ? 'disabled' : ''} data-a="${s.solved ? 'missionNext' : 'missionCheck'}">${s.solved ? (s.index === total - 1 ? 'Ir a la práctica escrita →' : 'Siguiente decisión →') : 'Comprobar respuesta'}</button>${!s.solved && s.mode === 'free' ? '<button class="button ghost block mt" data-a="missionReveal">Ver solución sin responder</button>' : ''}</section></div>`;
 }
 function learningProgress(){const h=progress.missionHistory||{},plays=missionCount(),rate=missionAccuracy(),skills=Object.entries(progress.missionSkills||{}).sort((a,b)=>b[1].questions-a[1].questions);const latest=Object.keys(h).sort((a,b)=>(h[b].lastDate||'').localeCompare(h[a].lastDate||''));return heading('TU MAPA DE COMPETENCIAS','Tu progreso de aprendizaje','Consulta la precisión inicial, la ayuda utilizada y el resultado de los repasos.')+adaptiveProgress()+`<div class="stats progress-stats"><div class="stat"><div class="stat-icon">🧭</div><div class="value">${plays}</div><div class="label">Misiones practicadas</div></div><div class="stat"><div class="stat-icon">🎯</div><div class="value">${rate===null?'—':rate+'%'}</div><div class="label">Aciertos al primer intento</div></div><div class="stat"><div class="stat-icon">📝</div><div class="value">${Object.keys(h).length}/${MISSIONS.length}</div><div class="label">Escenarios diferentes</div></div><div class="stat"><div class="stat-icon">🧠</div><div class="value">${pendingErrors()}</div><div class="label">Errores pendientes</div></div></div><div class="grid grid-2 mt"><section class="card"><h2 class="section-h">Fortalezas por habilidad</h2><p class="subtle">Porcentaje real de decisiones acertadas antes de recibir pistas.</p>${skills.length?skills.map(([skill,v])=>`<div class="skill-row"><div class="between"><strong>${esc(skill)}</strong><span>${Math.round(100*v.first/v.questions)}% · ${v.questions} decisiones</span></div>${progressBar(v.first,v.questions)}</div>`).join(''):'<div class="empty-progress">Completa una misión para empezar a ver datos de tus habilidades.</div>'}<div class="info-note">No confundas 100% en pocos ejercicios con un dominio certificado. Repite con nuevos contextos.</div></section><section class="card"><h2 class="section-h">Tu historial reciente</h2>${latest.length?latest.slice(0,8).map(id=>{const m=MISSIONS.find(m=>m.id===id),v=h[id];return `<div class="activity-row"><span>${m?.icon||'📘'} <strong>${esc(m?.title||id)}</strong></span><span>${esc(v.lastAccuracy)}% · ${esc(v.lastDate)}</span></div>`}).join(''):'<p>Aún no hay misiones completadas.</p>'}<button class="button ghost mt" data-a="nav" data-id="missions">Practicar más casos ↗</button></section></div><div class="card mt"><h2 class="section-h">Historial acumulado</h2><p>Los totales y porcentajes históricos incluyen las misiones de FluentLab 3.0. El desglose por modalidad comienza con FluentLab 3.1.</p></div>`}
 function recordCloudEvent(type,id,score){if(!progress.cloudEventsConsent||!window.FluentCloud?.available())return;window.FluentCloud.track(type,id,score).catch(()=>{});}
@@ -337,6 +340,7 @@ case 'missionFilter':ui.missionFilter=id;render();break;
 case 'openMission':openMission(id);break;
 case 'missionChoice':missionChoice(ix);break;
 case 'missionCheck':missionCheck();break;
+case 'missionReveal':missionCheck(true);break;
 case 'missionNext':missionNext();break;
 case 'missionModel':if(ui.mission?.stage==='transfer'){ui.mission.showModel=!ui.mission.showModel;render();document.querySelector('[data-a="missionModel"]')?.focus()}break;
 case 'missionFinish':finishMission();break;

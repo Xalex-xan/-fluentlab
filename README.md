@@ -4,7 +4,7 @@ Laboratorio de inglés con lecciones, escucha, voz, tarjetas y 16 misiones.
 Cada misión tiene dos variantes, con dos decisiones situadas y una decisión de
 transferencia en un contexto nuevo.
 
-- **Práctica libre:** el texto de la misión es opcional.
+- **Práctica libre:** puedes consultar las soluciones sin responder. El texto de la misión es opcional.
 - **Curso evaluado:** requiere una entrega escrita de al menos tres palabras.
   Se registra la entrega y se ofrecen un modelo y criterios de autoevaluación.
 - **Mi progreso:** separa cierres de misión, aciertos iniciales, aciertos

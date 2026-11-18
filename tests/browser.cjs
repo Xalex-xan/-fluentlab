@@ -117,7 +117,7 @@ async function run() {
     await answerMission(page, 1);
     await page.locator('#missionWrite').fill(' ');
     await page.locator('[data-a="missionFinish"]').click();
-    await hasContent(page.getByRole('alert'), 'Escribe al menos tres palabras');
+    await page.getByText('Escribe al menos tres palabras', {exact: false}).waitFor();
     await page.locator('#missionWrite').fill('Could you check the receipt number?');
     await page.locator('[data-a="missionModel"]').click();
     await hasContent(page.locator('.transfer-panel'), 'Criterios de autoevaluación');

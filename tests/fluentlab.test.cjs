@@ -169,3 +169,20 @@ test('carga todo el catálogo, las rutas y las configuraciones públicas', () =>
   assert.match(files['cloud-config.js'], /publishableKey:\s*''/);
   assert.match(files['cloud-config.js'], /cloudflareToken:\s*''/);
 });
+
+test('la práctica libre permite consultar soluciones sin registrar errores', () => {
+  const app = createTest(files);
+  app.click('openMission', {id: 'a2-delivery'});
+  for (let i = 0; i < 3; i++) {
+    assert.ok(app.app.innerHTML.includes('Ver solución sin responder'));
+    app.click('missionReveal');
+    assert.ok(app.app.innerHTML.includes('Solución explicada'));
+    app.click('missionNext');
+  }
+  app.click('missionFinish');
+  const p = app.stored();
+  assert.deepEqual(p.missionErrors, {});
+  assert.equal(p.missionResults['a2-delivery'].free.revealed, 3);
+  assert.equal(p.missionResults['a2-delivery'].free.first, 0);
+  assert.equal(p.missionReviews['a2-delivery'].demonstratedOn, null);
+});

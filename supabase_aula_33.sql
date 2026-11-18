@@ -116,7 +116,7 @@ $$;
 
 -- El bloqueo comparte el orden de escritura con la revocación de consentimiento.
 create function xanny_private.require_event_consent() returns trigger
-language plpgsql security definer set search_path = '' as $
+language plpgsql security definer set search_path = '' as $$
 declare agreed boolean;
 begin
   select enabled into agreed from public.study_analytics_preferences where user_id = new.user_id for share;
@@ -125,7 +125,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 create trigger require_event_consent before insert on public.study_events
   for each row execute function xanny_private.require_event_consent();
 
@@ -138,7 +138,7 @@ create function public.xanny_save_progress(
   p_alias text, p_level text, p_snapshot jsonb, p_expected timestamptz
 ) returns jsonb language plpgsql security definer set search_path = '' as $$
 declare actor uuid := xanny_private.require_user();
-declare saved public.learning_profiles;
+        saved public.learning_profiles;
 begin
   if p_expected is null then
     insert into public.learning_profiles(id, nickname, level, snapshot)
@@ -191,7 +191,7 @@ $$;
 create function public.xanny_create_group(p_name text) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare actor uuid := xanny_private.require_user();
-declare new_id uuid;
+        new_id uuid;
 begin
   if xanny_private.education_role(actor) not in ('teacher','admin') then
     raise exception 'Acceso docente obligatorio' using errcode = '42501';
@@ -205,7 +205,7 @@ $$;
 create function public.xanny_join_group(p_code uuid, p_alias text) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare actor uuid := xanny_private.require_user();
-declare target_group uuid;
+        target_group uuid;
 begin
   if xanny_private.education_role(actor) <> 'student' then
     raise exception 'La inscripción requiere una cuenta de estudiante' using errcode = '42501';
@@ -247,7 +247,7 @@ create function public.xanny_submit_result(
   p_revealed smallint, p_written boolean, p_review_due date
 ) returns void language plpgsql security definer set search_path = '' as $$
 declare actor uuid := xanny_private.require_user();
-declare target_group uuid;
+        target_group uuid;
 begin
   select a.group_id into target_group from public.classroom_assignments a
     join public.classroom_members m on m.group_id = a.group_id and m.student_id = actor

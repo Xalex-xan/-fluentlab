@@ -29,6 +29,8 @@ body.light {
 .skip-main:focus {transform:translateY(0);}
 :where(button, summary, a, input, select, textarea):focus-visible {outline:3px solid var(--study-soft);outline-offset:3px;}
 .main:focus {outline:none;}
+/* Conserva el contraste durante los cambios de pregunta. */
+.page {animation:none;}
 .button:not(.sm) {min-height:43px;}
 .button .ui-icon {width:17px;height:17px;}
 .card, .case-card, .lesson-card {border-radius:16px;}

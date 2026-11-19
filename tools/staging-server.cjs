@@ -1,32 +1,71 @@
 const {createServer} = require('node:https');
+const {createHash, timingSafeEqual} = require('node:crypto');
 const {readFile} = require('node:fs/promises');
 const {join, extname} = require('node:path');
+const {renderPrivacyNotice} = require('./privacy-notice.cjs');
 
 const root = join(__dirname, '..');
+const devProject = 'https://eoivuyvdohlehygxnmye.supabase.co';
 const types = {'.js':'text/javascript','.css':'text/css','.html':'text/html','.svg':'image/svg+xml',
   '.webmanifest':'application/manifest+json','.png':'image/png'};
-const publicFiles = new Set([
+const assets = new Set([
   'index.html','privacy.html','styles.css','studio.css','learning.css','icons.svg','xanny.svg',
   'data.js','question-bank.js','mission-transfer.js','missions-data.js','adaptive.js','study-profile.js',
   'progress-sync.js','cloud.js','learning-ui.js','units-data.js','units.js','app.js','manifest.webmanifest',
-  'favicon.svg','icon-192.png','icon-512.png','sw.js'
+  'favicon.svg','icon-192.png','icon-512.png'
 ]);
 
-function createStagingServer({tls, origin, config, privacyHtml}) {
-  const host = new URL(origin).host;
-  return createServer(tls, async (request, response) => {
-    if (request.headers.host !== host) return response.writeHead(421).end();
-    if (!['GET','HEAD'].includes(request.method)) return response.writeHead(405).end();
-    const file = new URL(request.url, origin).pathname.slice(1) || 'index.html';
-    const headers = {'Cache-Control':'no-store','Referrer-Policy':'no-referrer',
-      'X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
+function accessGate(access) {
+  if (!Array.isArray(access) || !access.length || access.length > 50) throw Error('Define entre 1 y 50 accesos privados.');
+  const names = new Set();
+  const hashes = access.map(entry => {
+    if (typeof entry?.username !== 'string' || !/^[A-Za-z0-9._-]{1,40}$/.test(entry.username) ||
+      names.has(entry.username) || typeof entry.password !== 'string' || !/^[!-~]{32,120}$/.test(entry.password)) {
+      throw Error('Cada acceso requiere un identificador único y un secreto de al menos 32 caracteres.');
+    }
+    names.add(entry.username);
+    return createHash('sha256').update(entry.username + ':' + entry.password).digest();
+  });
+
+  return header => {
+    if (typeof header !== 'string') return false;
+    const match = /^Basic ([A-Za-z0-9+/]{1,220}={0,2})$/i.exec(header);
+    if (!match) return false;
+    const candidate = createHash('sha256').update(Buffer.from(match[1], 'base64')).digest();
+    let allowed = false;
+    for (const expected of hashes) allowed = timingSafeEqual(candidate, expected) || allowed;
+    return allowed;
+  };
+}
+
+function createStagingServer({tls, origin, config, privacyHtml, access}) {
+  const target = new URL(origin);
+  if (target.protocol !== 'https:' || !privacyHtml) throw Error('Se requiere HTTPS y un aviso de privacidad.');
+  const authorized = accessGate(access);
+  const bootConfig = 'window.XANNY_CLOUD_CONFIG = ' + JSON.stringify({...config,privateStaging:true});
+  return createServer({...tls, maxHeaderSize:8192}, async (request, response) => {
+    const headers = {
+      'Cache-Control':'private, no-store', 'Vary':'Authorization', 'Referrer-Policy':'no-referrer',
+      'X-Content-Type-Options':'nosniff', 'X-Frame-Options':'DENY',
+      'X-Robots-Tag':'noindex, nofollow', 'Strict-Transport-Security':'max-age=86400'
+    };
+    if (request.headers.host !== target.host) return response.writeHead(421, headers).end();
+    if (!authorized(request.headers.authorization)) {
+      return response.writeHead(401, {...headers,'WWW-Authenticate':'Basic realm="Xanny ensayo", charset="UTF-8"'}).end();
+    }
+    if (!['GET','HEAD'].includes(request.method)) return response.writeHead(405, {...headers,Allow:'GET, HEAD'}).end();
+
+    let url;
+    try { url = new URL(request.url, target); } catch { return response.writeHead(400, headers).end(); }
+    if (url.origin !== target.origin) return response.writeHead(421, headers).end();
+    const file = url.pathname.slice(1) || 'index.html';
     if (file === 'cloud-config.js') {
       response.writeHead(200, {...headers,'Content-Type':'text/javascript; charset=utf-8'});
-      return response.end(request.method === 'HEAD' ? undefined : 'window.XANNY_CLOUD_CONFIG = ' + JSON.stringify(config));
+      return response.end(request.method === 'HEAD' ? undefined : bootConfig);
     }
-    if (!publicFiles.has(file)) return response.writeHead(404, headers).end();
+    if (!assets.has(file)) return response.writeHead(404, headers).end();
     try {
-      const data = file === 'privacy.html' && privacyHtml ? privacyHtml : await readFile(join(root,file));
+      const data = file === 'privacy.html' ? privacyHtml : await readFile(join(root,file));
       if (file === 'privacy.html') {
         headers['Content-Security-Policy'] = "default-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
       }
@@ -41,40 +80,33 @@ function createStagingServer({tls, origin, config, privacyHtml}) {
 async function main() {
   const env = process.env;
   const origin = new URL(env.XANNY_STAGING_ORIGIN || '');
-  const privacy = new URL(env.XANNY_STAGING_PRIVACY_URL || '');
   const key = env.XANNY_STAGING_PUBLISHABLE_KEY || '';
   if (origin.protocol !== 'https:' || origin.hostname.endsWith('.github.io') || origin.pathname !== '/' ||
-    origin.username || origin.password || origin.search || origin.hash || privacy.protocol !== 'https:' ||
-    privacy.username || privacy.password || privacy.origin !== origin.origin && privacy.hostname.endsWith('.github.io') ||
-    !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
-    throw Error('Usa un origen HTTPS separado, un aviso HTTPS aprobado y la clave publicable de desarrollo.');
+    origin.username || origin.password || origin.search || origin.hash || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
+    throw Error('Configura un origen HTTPS separado y la clave publicable de xanny-dev.');
   }
-  const [cert, privateKey] = await Promise.all([readFile(env.XANNY_TLS_CERT),readFile(env.XANNY_TLS_KEY)]);
-  let privacyHtml;
-  if (privacy.origin === origin.origin) {
-    if (privacy.pathname !== '/privacy.html' || !env.XANNY_STAGING_PRIVACY_FILE) {
-      throw Error('Para un aviso en el mismo origen, aporta el HTML aprobado para /privacy.html.');
-    }
-    privacyHtml = await readFile(env.XANNY_STAGING_PRIVACY_FILE);
-    if (!privacyHtml.length || /borrador para pruebas|\[responsable\]/i.test(privacyHtml.toString('utf8'))) {
-      throw Error('El aviso local de privacidad todavía es un borrador.');
-    }
-  }
+  const [cert, privateKey, template, ownerFile, accessFile] = await Promise.all([
+    readFile(env.XANNY_TLS_CERT), readFile(env.XANNY_TLS_KEY), readFile(join(root,'privacy.html'),'utf8'),
+    readFile(env.XANNY_STAGING_PRIVACY_JSON,'utf8'), readFile(env.XANNY_STAGING_ACCESS_FILE,'utf8')
+  ]);
+  const privacyHtml = renderPrivacyNotice(template, JSON.parse(ownerFile));
+  const access = JSON.parse(accessFile);
   const config = {
     accountsEnabled:true, classroomEnabled:true, developmentMode:false,
     studyAnalyticsEnabled:false, visitorAnalyticsEnabled:false,
-    supabaseUrl:'https://eoivuyvdohlehygxnmye.supabase.co', publishableKey:key, privacyPolicyUrl:privacy.href
+    supabaseUrl:devProject, publishableKey:key, privacyPolicyUrl:new URL('/privacy.html',origin).href
   };
   const port = Number(env.XANNY_STAGING_PORT || origin.port || 443);
   const bind = env.XANNY_STAGING_BIND || '127.0.0.1';
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Puerto de ensayo inválido.');
-  createStagingServer({tls:{cert,key:privateKey},origin:origin.origin,config,privacyHtml}).listen(port,bind,() => {
-    console.log('Servidor HTTPS de ensayo disponible en ' + origin.origin);
+  createStagingServer({tls:{cert,key:privateKey},origin:origin.origin,config,privacyHtml,access}).listen(port,bind,() => {
+    console.log('Servidor HTTPS privado de ensayo listo en ' + origin.origin);
   });
 }
 
+// Mensajes de inicio sin mostrar contenido de archivos de configuración o credenciales.
 if (require.main === module) main().catch(error => {
-  console.error(error.message);
+  console.error(error instanceof SyntaxError ? 'Un archivo JSON de configuración no es válido.' : error.message);
   process.exitCode = 1;
 });
 module.exports = {createStagingServer};

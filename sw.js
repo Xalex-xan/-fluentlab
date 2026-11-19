@@ -1,4 +1,4 @@
-const RELEASE = '3.4.0';
+const RELEASE = '3.4.1';
 const CACHE_PREFIX = 'xanny-english-static-';
 const CACHE = CACHE_PREFIX + RELEASE;
 const PREVIOUS_CACHES = new Set(['fluentlab-static-3.1.0', 'fluentlab-static-v3-20261117']);

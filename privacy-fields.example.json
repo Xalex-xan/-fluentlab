@@ -1,0 +1,32 @@
+{
+  "approved": false,
+  "effectiveOn": "",
+  "controller": {
+    "name": "",
+    "contact": "",
+    "scope": ""
+  },
+  "purposes": {
+    "account": "",
+    "progress": "",
+    "classroom": "",
+    "analytics": ""
+  },
+  "processors": {
+    "hosting": "",
+    "email": "",
+    "transfers": ""
+  },
+  "retention": {
+    "account": "",
+    "progress": "",
+    "classroom": "",
+    "logs": "",
+    "backups": ""
+  },
+  "rights": {
+    "requests": "",
+    "complaints": ""
+  },
+  "minors": ""
+}

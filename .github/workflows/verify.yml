@@ -2,7 +2,7 @@ name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/xanny-unidades-interfaz]
+    branches: [main, development/xanny-rc-cuentas]
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Pruebas de lógica y compatibilidad
-        run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs
+        run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs tests/privacy-notice.test.cjs
       - name: Preparar Playwright para Chrome del runner
         run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 axe-core@4.11.1
       - name: Probar escritorio, móvil y Service Worker
@@ -46,10 +46,10 @@ jobs:
           base=https://xalex-xan.github.io/-fluentlab
           for attempt in {1..18}; do
             if html=$(curl --fail --silent --show-error --max-time 5 "$base/?release=${GITHUB_SHA}&attempt=$attempt") &&
-              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.4.0"* ]]; then
-              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.4.0")
+              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.4.1"* ]]; then
+              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.4.1")
               printf '%s' "$manifest" | node -e "const m = JSON.parse(require('node:fs').readFileSync(0)); if(m.name !== 'Aprende con Xanny' || m.icons.length !== 2) process.exit(1);"
-              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.4.0" > /dev/null
+              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.4.1" > /dev/null
               printf 'Marca, manifest y mascota verificados en GitHub Pages.\n'
               exit 0
             fi
@@ -58,7 +58,7 @@ jobs:
           exit 1
 
   auth:
-    if: github.ref == 'refs/heads/development/xanny-unidades-interfaz'
+    if: github.ref == 'refs/heads/development/xanny-rc-cuentas'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -88,12 +88,14 @@ jobs:
           config = config.replace('enable_confirmations = false', 'enable_confirmations = true', 1)
           config = re.sub(r'(?m)^(\[(?:studio|realtime|storage|edge_runtime|analytics)\]\n)enabled = true$',
                           r'\1enabled = false', config)
+          config += '\n[auth.hook.before_user_created]\nenabled = true\nuri = "pg-functions://postgres/public/xanny_pilot_before_signup"\n'
           path.write_text(config)
           PY
           mkdir -p supabase/migrations
           cp supabase_setup.sql supabase/migrations/20261117000000_base.sql
           cp supabase_aula_33.sql supabase/migrations/20261118000000_aula.sql
           cp supabase_progress_sync.sql supabase/migrations/20261119000000_sync.sql
+          cp supabase_pilot_signup_gate.sql supabase/migrations/20261120000000_pilot_gate.sql
           if ! npx --yes supabase@2.75.0 start > "$RUNNER_TEMP/xanny-supabase.log" 2>&1; then
             sed -n -E '/(failed|Error|ERROR|denied|rate limit)/p' "$RUNNER_TEMP/xanny-supabase.log" | tail -15
             exit 1
@@ -116,4 +118,5 @@ jobs:
           export XANNY_TEST_CERT="$RUNNER_TEMP/xanny-ci.crt"
           export XANNY_TEST_KEY="$RUNNER_TEMP/xanny-ci.key"
           export XANNY_TEST_CERT_PIN=$(openssl x509 -in "$XANNY_TEST_CERT" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 -A)
+          export XANNY_TEST_SERVICE_ROLE=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").SERVICE_ROLE_KEY')
           node tests/auth.cjs

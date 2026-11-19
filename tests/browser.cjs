@@ -251,7 +251,7 @@ async function run() {
     await checkA11y(page,'.unit-cards');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.4.0')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.4.1')));
     await desktop.setOffline(true);
     await page.reload();
     await page.locator('.page h1').waitFor();

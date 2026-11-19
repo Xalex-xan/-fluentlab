@@ -122,8 +122,9 @@ cuentan como ayuda. Los resultados y la fecha de repaso se sincronizan con el
 progreso existente; el texto de escritura permanece en el dispositivo. La
 evaluación separa precisión inicial, corrección asistida y entrega escrita.
 
-El [ensayo HTTPS](docs/ensayo-https.md) explica cómo preparar el servidor
-separado, el SMTP, las redirecciones y el aviso de privacidad. GitHub Actions
+El [candidato de ensayo HTTPS privado](docs/ensayo-https.md) documenta el
+servidor, el control de altas, el SMTP, la privacidad y las pruebas de
+eliminación. GitHub Actions
 ejecuta la prueba de cuentas con TLS, revisión de accesibilidad con axe y
 presupuestos de recursos en Chrome. La validación del correo real en el host
 y la aprobación del aviso siguen siendo condiciones para abrir el registro.

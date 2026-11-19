@@ -1,5 +1,10 @@
 const assert = require('node:assert/strict');
 const {createStagingServer} = require('../tools/staging-server.cjs');
+const {renderPrivacyNotice} = require('../tools/privacy-notice.cjs');
+const {request} = require('node:https');
+const {randomBytes} = require('node:crypto');
+const {join} = require('node:path');
+const {createClient} = require('@supabase/supabase-js');
 const {readFile} = require('node:fs/promises');
 const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
@@ -11,15 +16,87 @@ const db = process.env.XANNY_DEV_DB;
 const mail = process.env.XANNY_DEV_MAIL || 'http://127.0.0.1:54324';
 const sdk = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm';
 const otpResponses = new WeakMap();
+const access = ['ci-alumno-uno','ci-alumno-dos'].map(username => ({
+  username,password:randomBytes(36).toString('base64url')
+}));
+const fixtureMailboxes = ['student-one@example.com','student-two@example.com','class-teacher@example.com'];
+
+function approvedFixture(value) {
+  if (typeof value === 'string') return 'Valor sintético del ensayo';
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key,item]) => [key,approvedFixture(item)]));
+  }
+  return value;
+}
 
 async function serve() {
-  const [cert, privateKey] = await Promise.all([
-    readFile(process.env.XANNY_TEST_CERT), readFile(process.env.XANNY_TEST_KEY)
+  const [cert, privateKey, template] = await Promise.all([
+    readFile(process.env.XANNY_TEST_CERT), readFile(process.env.XANNY_TEST_KEY),
+    readFile(join(__dirname,'../privacy.html'),'utf8')
   ]);
-  return createStagingServer({tls:{cert,key:privateKey}, origin:base, config:{
+  const input = {...approvedFixture(require('../privacy-fields.example.json')),approved:true,effectiveOn:'2000-01-01'};
+  const privacyHtml = renderPrivacyNotice(template,input);
+  return {cert,server:createStagingServer({tls:{cert,key:privateKey}, origin:base, privacyHtml, access, config:{
     developmentMode:true, accountsEnabled:true, classroomEnabled:true, studyAnalyticsEnabled:true,
     supabaseUrl:api, publishableKey:key, privacyPolicyUrl:base+'/privacy.html'
-  }});
+  }})};
+}
+
+function readPreview(path, ca, accessEntry, method = 'GET') {
+  const headers = accessEntry ? {Authorization:'Basic '+Buffer.from(accessEntry.username+':'+accessEntry.password).toString('base64')} : {};
+  return new Promise((resolve,reject) => {
+    const req = request(base+path,{ca,headers,method,timeout:5000},response => {
+      let body = '';
+      response.setEncoding('utf8').on('data', chunk => {body += chunk;});
+      response.once('end',()=>resolve({status:response.statusCode,headers:response.headers,body}));
+      response.once('error',reject);
+    });
+    req.once('timeout',()=>req.destroy(Error('La vista HTTPS no respondió.')));
+    req.once('error',reject);
+    req.end();
+  });
+}
+
+async function verifyPrivatePreview(cert) {
+  for (const path of ['/', '/?auth=1', '/cloud-config.js', '/privacy.html', '/app.js']) {
+    const missing = await readPreview(path,cert,null);
+    assert.equal(missing.status,401,path);
+    assert.match(missing.headers['www-authenticate'],/^Basic/);
+    assert.match(missing.headers['cache-control'],/no-store/);
+  }
+  assert.equal((await readPreview('/',cert,{...access[0],password:'incorrecto'})).status,401);
+  for (const identity of access) {
+    const ok = await readPreview('/',cert,identity);
+    assert.equal(ok.status,200);
+    assert.match(ok.body,/Aprende con Xanny/);
+  }
+  const cfg = await readPreview('/cloud-config.js',cert,access[0]);
+  assert.equal(cfg.status,200);
+  assert.match(cfg.body,/"privateStaging":true/);
+  assert.ok(access.every(entry=>!cfg.body.includes(entry.password)));
+  assert.equal((await readPreview('/sw.js',cert,access[0])).status,404);
+  assert.equal((await readPreview('/deploy/access.example.json',cert,access[0])).status,404);
+  assert.equal((await readPreview('/privacy.html',cert,access[0],'HEAD')).body,'');
+  console.log('Ensayo privado HTTPS: desafío de acceso, dos identidades de prueba, recursos y aviso protegidos.');
+}
+
+function queryLocal(sql) {
+  try {
+    return execFileSync('psql',[db,'-X','-v','ON_ERROR_STOP=1','-Atq','-c',sql],
+      {encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+  } catch {
+    throw Error('No se pudo ejecutar la comprobación SQL local.');
+  }
+}
+
+async function configureLocalPilot() {
+  const rows = fixtureMailboxes.map(email => "('" + email + "')").join(',');
+  queryLocal('insert into xanny_private.pilot_mailboxes(email) values '+rows);
+  const denied = await createClient(api,key,{auth:{persistSession:false,autoRefreshToken:false}})
+    .auth.signInWithOtp({email:'unlisted-pilot@example.com',options:{shouldCreateUser:true}});
+  assert.equal(denied.error?.status,403,'El hook de Auth debe rechazar un buzón sin autorización.');
+  assert.equal(queryLocal("select count(*) from auth.users where email='unlisted-pilot@example.com'"),'0');
+  console.log('Supabase Auth rechazó el alta fuera de la lista privada.');
 }
 
 async function messages() {
@@ -75,7 +152,7 @@ async function authData(page) {
     const authKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
     const session = JSON.parse(localStorage.getItem(authKey));
     const progressKey = 'fluentlab_v1:account:' + session.user.id;
-    return {token: session.access_token, userId: session.user.id, progressKey};
+    return {token: session.access_token, refresh:session.refresh_token, userId: session.user.id, progressKey};
   });
 }
 
@@ -98,8 +175,10 @@ async function confirmAction(page, name, accept = true) {
   await Promise.all([dialog, page.getByRole('button', {name, exact: true}).click()]);
 }
 
-async function browserPage(browser, vendor, faults) {
-  const context = await browser.newContext({viewport: {width: 1360, height: 800}, serviceWorkers: 'block'});
+async function browserPage(browser, vendor, faults, accessEntry = access[0]) {
+  const context = await browser.newContext({viewport:{width:1360,height:800},serviceWorkers:'block',
+    httpCredentials:{...accessEntry,origin:base}});
+
   await context.route(sdk, route => route.fulfill({
     contentType: 'text/javascript', headers: {'Access-Control-Allow-Origin': '*'}, body: vendor
   }));
@@ -118,23 +197,103 @@ async function browserPage(browser, vendor, faults) {
   return page;
 }
 
+
+async function finishPilotUnit(page, scope) {
+  await show(page,'units');
+  await page.locator('[data-a="unitOpen"][data-id="b1-viaje"]').click();
+  await page.locator('[data-a="unitSession"][data-session="words"]').click();
+  const questions = await page.evaluate(progressKey => {
+    const session = UNIT_DATA.find(u=>u.id==='b1-viaje').sessions.find(s=>s.id==='words');
+    const ids = JSON.parse(localStorage.getItem(progressKey)).unitRecent['b1-viaje/words'];
+    return ids.map(id=>session.questions.find(q=>q.id===id));
+  },scope);
+  for (const q of questions) {
+    if (q.type === 'choice') await page.locator('#unitOption-'+q.options.indexOf(q.answer)).click();
+    if (q.type === 'word') await page.locator('#unitShort').fill(q.answers[0]);
+    if (q.type === 'order') {
+      for (const [index] of q.parts.entries()) await page.locator('#unitToken-'+index).click();
+    }
+    await page.locator('#unitCheck').click();
+    await page.locator('[data-a="unitNext"]').click();
+  }
+  await page.getByRole('heading',{name:'Sesión finalizada'}).waitFor();
+}
+
+async function verifyAccountRemoval(student, unaffected, teacher, group) {
+  await show(student,'account');
+  await student.getByText('Eliminar cuenta y datos',{exact:true}).click();
+  await confirmAction(student,'Solicitar eliminación');
+  await student.getByText('Solicitud registrada.',{exact:false}).waitFor();
+  const credentials = await authData(student);
+  const other = await authData(unaffected);
+  const headers = {apikey:key,'Authorization':'Bearer '+credentials.token,'Content-Type':'application/json'};
+  assert.match(credentials.userId,/^[0-9a-f-]{36}$/i);
+  assert.match(other.userId,/^[0-9a-f-]{36}$/i);
+
+  // La actividad de prueba se registra solo después del consentimiento de esa cuenta.
+  assert.equal((await rest(student,'rpc/xanny_analytics_consent',{p_enabled:true})).data,true);
+  const event = await fetch(api+'/rest/v1/study_events',{method:'POST',headers,
+    body: JSON.stringify({user_id:credentials.userId,kind:'lesson_started',module_id:'a1-1'})});
+  assert.equal(event.status,201);
+
+  const adminUrl = api+'/auth/v1/admin/users/'+credentials.userId;
+  const denied = await fetch(adminUrl,{method:'DELETE',headers:{apikey:key,Authorization:'Bearer '+other.token}});
+  assert.ok([401,403].includes(denied.status),'El segundo alumno no debe poder borrar la cuenta ajena.');
+
+  const relations = [
+    ['auth.users','id'],['public.learning_profiles','id'],['public.study_events','user_id'],
+    ['public.study_analytics_preferences','user_id'],['public.account_deletion_requests','user_id'],
+    ['public.classroom_members','student_id'],['public.classroom_results','student_id']
+  ];
+  function rows() {
+    return queryLocal('select '+relations.map(([table,column]) =>
+      "(select count(*) from "+table+" where "+column+"='"+credentials.userId+"')").join(',')).split('|').map(Number);
+  }
+  assert.deepEqual(rows(),[1,1,1,1,1,1,1],'La prueba debe crear datos en las siete relaciones.');
+  const serviceKey = process.env.XANNY_TEST_SERVICE_ROLE;
+  if (!serviceKey || serviceKey === key) throw Error('Falta el acceso administrativo del Supabase local de prueba.');
+  const admin = createClient(api,serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
+  const revoked = await admin.auth.admin.signOut(credentials.token,'global');
+  assert.equal(revoked.error,null,'La revocación global de la sesión local debe completarse.');
+  const removed = await admin.auth.admin.deleteUser(credentials.userId);
+  assert.equal(removed.error,null,'Debe poder borrarse la identidad de prueba desde administración.');
+  assert.deepEqual(rows(),[0,0,0,0,0,0,0]);
+  assert.equal(queryLocal("select count(*) from public.learning_profiles where id='"+other.userId+"'"),'1');
+  const refresh = createClient(api,key,{auth:{persistSession:false,autoRefreshToken:false}});
+  assert.ok((await refresh.auth.refreshSession({refresh_token:credentials.refresh})).error,
+    'La sesión de una cuenta eliminada no puede renovarse.');
+  const recreate = await fetch(api+'/rest/v1/rpc/xanny_sync_progress',{method:'POST',headers,
+    body:JSON.stringify({p_account:credentials.userId,p_alias:'Prueba de baja',p_level:'A2',
+      p_snapshot:{version:1,level:'A2'},p_revision:null})});
+  assert.equal(recreate.ok,false,'Un token anterior no debe recrear la copia borrada.');
+  assert.deepEqual(rows(),[0,0,0,0,0,0,0]);
+  const report = (await rest(teacher,'rpc/xanny_classroom_report',{p_group:group})).data;
+  assert.equal(report.members,0);
+  assert.equal(report.totals.completed,0);
+  console.log('Eliminación: petición, revocación de sesión y borrado en siete relaciones. El otro alumno conserva su copia.');
+}
+
 async function run() {
   if (!api || !key || !db || [api, db, mail].some(url => new URL(url).hostname !== '127.0.0.1')) throw Error('Usa un Supabase local de prueba.');
   const vendor = await readFile(process.env.XANNY_DEV_SDK, 'utf8');
-  const server = await serve();
+  const {server,cert} = await serve();
   await new Promise(resolve => server.listen(4173, '127.0.0.1', resolve));
   let browser;
   try {
     const pin = process.env.XANNY_TEST_CERT_PIN;
     if (!pin) throw Error('Falta la huella del certificado efímero de ensayo.');
     browser = await chromium.launch({channel: 'chrome',args:['--ignore-certificate-errors-spki-list='+pin]});
+    await verifyPrivatePreview(cert);
+    await configureLocalPilot();
     const errors = [];
     const one = await browserPage(browser, vendor, errors);
     const privacy = await one.goto(base+'/privacy.html');
     assert.equal(privacy.status(),200);
     assert.match(privacy.headers()['x-robots-tag'],/noindex/);
     await one.getByRole('heading',{name:'Privacidad del piloto'}).waitFor();
-    const two = await browserPage(browser, vendor, errors);
+    await one.getByRole('heading',{name:'Responsable y contacto'}).waitFor();
+    assert.equal(await one.getByText('Plantilla pendiente de aprobación').count(),0);
+    const two = await browserPage(browser, vendor, errors, access[1]);
     const teacher = await browserPage(browser, vendor, errors);
     const another = await browserPage(browser, vendor, errors);
     await one.addInitScript(() => {
@@ -146,8 +305,7 @@ async function run() {
     await signIn(one, 'student-one@example.com', true);
     await signIn(two, 'student-two@example.com', true);
     await signIn(teacher, 'class-teacher@example.com', true);
-    execFileSync('psql', [db, '-X', '-v', 'ON_ERROR_STOP=1', '-c',
-      "insert into public.study_teachers select id from auth.users where email = 'class-teacher@example.com'"], {stdio: 'pipe'});
+    queryLocal("insert into public.study_teachers select id from auth.users where email = 'class-teacher@example.com'");
 
 
     const state = (page, value = 'saved') => page.locator('#accountSyncStatus[data-state="' + value + '"]').waitFor();
@@ -245,6 +403,13 @@ async function run() {
     assert.equal(lessons['a1-1'].sessions, 1);
     assert.equal(lessons['a1-1'].first + lessons['a1-1'].assisted + lessons['a1-1'].revealed, 3);
 
+    await finishPilotUnit(one,who.progressKey);
+    await show(one,'account');
+    await state(one);
+    const units = (await rest(one,'learning_profiles?select=snapshot')).data[0].snapshot;
+    assert.equal(units.unitSessions['b1-viaje/words'].free.completed,1);
+    assert.equal(units.unitDrafts,undefined);
+
     await show(teacher, 'classroom');
     await teacher.locator('#className').fill('Inglés del martes');
     await teacher.getByRole('button', {name: 'Crear grupo'}).click();
@@ -298,6 +463,8 @@ async function run() {
     const otherScope = await authData(one);
     assert.notEqual(otherScope.userId, who.userId);
     assert.equal(await one.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}').completed?.['a1-1'], otherScope.progressKey), undefined);
+    await state(one);
+    await verifyAccountRemoval(another,one,teacher,group);
     assert.deepEqual(errors, []);
     console.log('HTTPS, Supabase Auth y Mailpit: tres cuentas verificadas, recuperación en otro navegador y cambio de cuenta.');
     console.log('Aula: grupo, inscripción, asignación, entrega voluntaria, informe docente y bloqueo de acceso cruzado.');

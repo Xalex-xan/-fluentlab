@@ -1,82 +1,143 @@
-# Entorno HTTPS del piloto
+# Lanzamiento de cuentas · candidato de ensayo
 
-La rama de unidades parte de `69cfcab`. La configuración estática del
-repositorio conserva cuentas, aula y analítica desactivadas. GitHub Pages
-continúa desplegando desde `main`. El ensayo usa un origen independiente y
-el proyecto **xanny-dev**; no necesita tocar GitHub Pages.
+Esta rama parte de `44b3ad5`. GitHub Pages sigue usando la configuración
+estática con las cuentas y la analítica desactivadas. El servidor de ensayo
+inyecta la configuración de **xanny-dev** en memoria sobre un origen HTTPS
+independiente.
 
-## Ensayo reproducible
+## Despliegue privado
 
-El flujo de Actions crea un Supabase y Mailpit efímeros y genera un certificado
-TLS para `https://127.0.0.1:4173/`. Chrome acepta solo el certificado de esa
-ejecución mediante su huella SPKI. La prueba valida que el enlace iniciado
-por correo vuelve al origen HTTPS y que el contexto es seguro. Comprueba dos
-alumnos y un docente, aislamiento, restauración y sincronización. El correo
-se captura dentro del runner. Las migraciones del runner se ejecutan sobre
-una base vacía y desechable.
+Usa un host reservado para el piloto con Node.js 22 o posterior, DNS y un
+certificado válido. En Linux, la unidad `deploy/xanny-staging.service` ejecuta
+el servicio como usuario dedicado. El proceso termina TLS y exige un acceso
+HTTP Basic individual antes de devolver la página, los archivos, el aviso
+o `cloud-config.js`. El servidor rechaza un encabezado de host distinto al
+de ensayo, omite el Service Worker y envía instrucciones para evitar caché
+e indexación.
 
-## Instancia alojada
+1. Instala el commit revisado en `/opt/xanny-staging` y crea la cuenta local
+   de servicio `xanny-staging`. Usa `deploy/staging.env.example` como plantilla
+   de `/etc/xanny-staging/preview.env`. Almacena el certificado, su clave,
+   el archivo de accesos y el aviso aprobado fuera del repositorio, con acceso
+   de lectura limitado al usuario de servicio y al operador.
+2. Completa las variables de la tabla. Mantén la escucha en loopback si hay
+   un proxy HTTPS de ensayo. Configura el proxy para conservar el encabezado
+   `Host` público de ensayo y usar TLS en su conexión al servicio. En una
+   instalación directa, usa una interfaz de la red de ensayo y restringe su
+   acceso por firewall o VPN.
+3. Usa `deploy/access.example.json` como estructura. Asigna un identificador
+   y un secreto aleatorio diferente por probador. El servidor exige al menos
+   32 caracteres de secreto. Entrega los accesos por un canal privado.
+   Para revocar un acceso, retira su entrada y reinicia el servicio.
+4. Inicia `node tools/staging-server.cjs` en el host con esas variables, o
+   instala e inicia la unidad de servicio. Comprueba que el dominio responde
+   con certificado válido. Una visita sin credenciales debe recibir 401,
+   incluso en `/cloud-config.js` y `/privacy.html`. Comprueba ambos accesos
+   y que el aviso aprobado aparece sin la sección de plantilla.
 
-`node tools/staging-server.cjs` sirve la aplicación desde un dominio de
-ensayo con HTTPS y usa exclusivamente **xanny-dev**
-(`eoivuyvdohlehygxnmye`). Inyecta la configuración pública en memoria.
-La rama puede alojarse detrás de controles de acceso para el equipo del piloto.
-
-| Variable | Valor |
+| Variable | Valor que aporta el propietario |
 | --- | --- |
-| `XANNY_STAGING_ORIGIN` | Origen HTTPS del dominio de ensayo, con puerto si se usa uno distinto de 443. |
-| `XANNY_TLS_CERT` y `XANNY_TLS_KEY` | Rutas a un certificado válido y a su clave en el host. Guarda ambos fuera del repositorio. |
-| `XANNY_STAGING_PUBLISHABLE_KEY` | Clave publicable de **xanny-dev**. |
-| `XANNY_STAGING_PRIVACY_URL` | URL HTTPS del aviso completado y aprobado para el piloto. |
-| `XANNY_STAGING_PRIVACY_FILE` | HTML aprobado si la URL del aviso es `/privacy.html` en el mismo dominio. |
-| `XANNY_STAGING_BIND` y `XANNY_STAGING_PORT` | Interfaz y puerto de escucha del proceso. El valor predeterminado de la interfaz es `127.0.0.1`. |
+| `XANNY_STAGING_ORIGIN` | Origen HTTPS exclusivo del piloto; incluye puerto si es distinto de 443. |
+| `XANNY_STAGING_BIND` y `XANNY_STAGING_PORT` | Interfaz y puerto del host de ensayo. |
+| `XANNY_TLS_CERT` y `XANNY_TLS_KEY` | Rutas al certificado y a su clave privada en el host. |
+| `XANNY_STAGING_PUBLISHABLE_KEY` | Clave publicable de **xanny-dev** (`eoivuyvdohlehygxnmye`). |
+| `XANNY_STAGING_ACCESS_FILE` | Ruta al archivo de accesos individuales. |
+| `XANNY_STAGING_PRIVACY_JSON` | Ruta al aviso completo aprobado, basado en `privacy-fields.example.json`. |
 
-El servidor comprueba el origen y devuelve `noindex` para los recursos del
-piloto. Usa un subdominio específico de pruebas, un certificado válido y
-controles de acceso para los destinatarios del piloto. Mantén la clave
-privada de TLS y las credenciales SMTP en el gestor de secretos del host.
+## Supabase Auth y SMTP externo
 
-## Supabase Auth y SMTP
+Configura estos ajustes exclusivamente en **xanny-dev**.
 
-1. En **xanny-dev**, abre **Authentication → URL Configuration**. Usa el
-   origen del piloto como **Site URL** y permite el destino exacto
-   `https://TU-DOMINIO-DE-ENSAYO/?auth=1`. La aplicación solicita ese destino
-   mediante `emailRedirectTo`. Completa el enlace en el mismo navegador
-   que inició la solicitud de acceso.
-2. Activa el proveedor de correo con confirmación. En la configuración de
-   SMTP personalizado de Supabase, define un remitente verificado y registra
-   las credenciales en Supabase. Usa la configuración de remitente y dominio
-   que indique tu proveedor. Desactiva el seguimiento de clics en correos de
-   inicio de sesión para conservar el enlace de Auth.
-3. Prueba registro y acceso de dos buzones autorizados. Confirma recepción,
-   dominio y redirección HTTPS, caducidad y uso de un solo enlace, cierre de
-   sesión y recuperación en otro dispositivo. Comprueba que cada alumno
-   solo puede acceder a su progreso.
-4. Publica el aviso aprobado en el entorno de ensayo antes de invitar a
-   estudiantes. Completa responsable, contacto, proveedores, región,
-   plazos y procedimiento de baja. Si sirves el HTML desde el mismo dominio,
-   el servidor exige un archivo aprobado para sustituir la plantilla.
+| Ajuste | Valor que debe aportar el propietario |
+| --- | --- |
+| Site URL | El origen HTTPS privado. |
+| Redirect URLs | El destino exacto `https://TU-DOMINIO-DE-ENSAYO/?auth=1`, con el puerto real si corresponde. |
+| Proveedor | Correo activado y confirmación de email. Deshabilita el alta anónima para el piloto. |
+| SMTP | Host, puerto y modo TLS recomendados por el proveedor, usuario y credencial SMTP. |
+| Remitente | Correo de remitente y nombre visible autorizados en el proveedor. Configura sus registros de dominio. |
+| Límites | Frecuencia compatible con el plan SMTP y los dos buzones de prueba. |
+| Plantillas | Mantén el enlace de Supabase Auth `{{ .ConfirmationURL }}` en las plantillas aplicables y desactiva el seguimiento de clics del proveedor para esos mensajes. |
 
-Referencias de Supabase
-[Correo SMTP personalizado](https://supabase.com/docs/guides/auth/auth-smtp),
-[redirecciones](https://supabase.com/docs/guides/auth/redirect-urls) y
-[acceso sin contraseña](https://supabase.com/docs/guides/auth/auth-email-passwordless).
+Los secretos SMTP se introducen en Supabase. Los secretos de acceso al
+servidor y TLS se guardan en el host. En GitHub se versionan únicamente las
+plantillas vacías.
 
-## Revisión de seguridad
+El control del sitio y el alta de Supabase son distintos. La migración
+nueva `supabase_pilot_signup_gate.sql` añade el hook **Before User Created** y
+una lista privada de buzones. Instálala solo una vez si aún falta en el
+historial. Carga los buzones aprobados en
+`xanny_private.pilot_mailboxes` desde el SQL Editor de administración,
+normalizados en minúsculas y fuera del control de versiones. Selecciona
+`public.xanny_pilot_before_signup` en Authentication → Hooks. Una lista
+vacía bloquea las altas cuando el hook está habilitado. Comprueba también
+las cuentas ya existentes, porque el hook actúa al crear un usuario.
+Confirma que los otros ajustes de Auth de ese proyecto no amplían la audiencia.
 
-Se comprobó en `xanny-dev` el historial de migraciones existente y se realizó
-una auditoría de solo lectura. Las 12 tablas revisadas tenían RLS. No hubo
-permisos anónimos en esas tablas ni en las funciones privilegiadas revisadas,
-ni permisos de escritura en las tablas de roles para el rol autenticado.
-Los RPC privilegiados revisados fijan el `search_path` y comprueban la
-identidad del actor; los de clase verifican pertenencia o autoridad.
+[SMTP de Supabase](https://supabase.com/docs/guides/auth/auth-smtp) ·
+[Redirecciones de Auth](https://supabase.com/docs/guides/auth/redirect-urls) ·
+[Hook Before User Created](https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook)
 
-El asesor registra 13 avisos de RPC autenticados con `SECURITY DEFINER` y
-ocho avisos informativos de tablas con RLS sin política. En las tablas
-internas se deniega el acceso directo; los RPC forman la interfaz de acceso
-autenticado y siguen requiriendo pruebas de permisos. Conserva la lista de
-RPC y las pruebas de aislamiento al cambiar el esquema. No se volvieron a
-aplicar las migraciones de `xanny-dev`.
+## Verificación con buzones reales
 
-[Advertencia de funciones privilegiadas](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) ·
-[Tablas con RLS sin políticas](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)
+1. Usa dos buzones controlados y autorizados, registros de prueba y dos
+   perfiles independientes de navegador. Para la prueba docente, usa una
+   cuenta permitida con su rol asignado desde administración. Conserva
+   evidencia de fecha, estado de entrega, origen de retorno y resultado,
+   sin registrar credenciales, enlaces mágicos, tokens ni datos de alumnos.
+2. En cada perfil, registra su buzón y comprueba que recibe el mensaje del
+   remitente esperado. Abre el enlace desde el perfil que lo solicitó.
+   Verifica que vuelve por HTTPS a Mi cuenta del dominio de ensayo y que
+   no es reutilizable. Repite para inicio de sesión y cierre de sesión.
+   Comprueba que un buzón fuera de la lista no puede darse de alta.
+3. Crea progreso con el primer alumno. En otro perfil, entra con esa cuenta,
+   confirma la copia restaurada y fuerza un conflicto cambiando ambas copias.
+   Confirma el respaldo y la recuperación. Entra con el segundo alumno y
+   comprueba que su copia sigue separada. Verifica que un docente solo puede
+   consultar los grupos autorizados y los resultados compartidos.
+4. Con una cuenta de prueba, registra una solicitud de eliminación desde
+   Mi cuenta. El operador comprueba la identidad y que la solicitud sigue
+   vigente, revoca las sesiones y realiza el borrado definitivo con
+   Supabase Auth desde administración. Si la cuenta docente posee clases,
+   reasígnalas antes de un borrado autorizado para evitar el efecto de la
+   cascada. Comprueba que desaparecen la cuenta, copia, eventos,
+   consentimiento, solicitud, membresías y resultados de prueba y se
+   conserva el otro alumno. El borrado de la cuenta en la nube y la limpieza
+   del historial local se realizan por separado.
+5. Abre B1 y B2 desde la instancia alojada y comprueba una sesión, el
+   guardado, las animaciones y el modo de movimiento reducido.
+
+## Privacidad y revisión de seguridad
+
+`privacy.html` sigue siendo la plantilla en la versión estática. El servidor
+privado renderiza la versión aprobada con los valores proporcionados por el
+responsable. Rechaza archivos incompletos o sin aprobación. Los campos
+cubren identidad, contacto, jurisdicción, vigencia, fundamentos, proveedores
+y transferencias, conservación por categoría, derechos y participación de
+menores. El responsable aprueba el contenido y el proceso operativo de
+eliminación antes del piloto.
+
+La auditoría de solo lectura confirmó RLS en las 12 tablas existentes,
+sin acceso anónimo a datos protegidos, sin invocación anónima de RPC
+privilegiados y sin escritura desde el navegador en las tablas de roles.
+El asesor mantiene 13 avisos de RPC autenticados con `SECURITY DEFINER`
+y ocho avisos informativos de RLS sin política en tablas de acceso interno.
+Los RPC privilegiados fijan `search_path` y verifican identidad; los del
+aula verifican pertenencia o autoridad. Revisar un RPC nuevo incluye probar
+que los roles ajenos siguen sin acceso.
+
+La revocación impide reutilizar la renovación de sesión. Un token de acceso
+emitido antes del borrado puede sobrevivir hasta su caducidad. Las pruebas
+comprueban que la copia y los vínculos autorizados del usuario desaparecen
+y no se pueden recrear con la sesión eliminada. No se reaplican las
+migraciones anteriores de `xanny-dev`.
+
+[Aviso sobre RPC privilegiados](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable) ·
+[Sesiones de Supabase](https://supabase.com/docs/guides/auth/sessions)
+
+## Criterios para autorizar el lanzamiento
+
+- [ ] Instancia HTTPS privada accesible para las personas autorizadas y bloqueo sin acceso.
+- [ ] Enlaces reales entregados y redirección exacta comprobada con los dos buzones.
+- [ ] Aviso aprobado publicado y procedimiento de solicitudes de eliminación asignado a un responsable.
+- [ ] Progreso, conflictos, restauración, aislamiento, permisos docentes y eliminación comprobados en el piloto.
+- [ ] Revisión del PR y aprobación explícita del cambio de registro. La incorporación de este candidato conserva el registro público desactivado.

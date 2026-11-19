@@ -17,7 +17,7 @@ window.XannyDemo = (() => {
   function header() {
     return '<div class="demo-bar"><span class="demo-tag">' + icon('spark') + ' Demostración</span>' +
       '<div class="demo-bar-actions"><button class="button ghost sm" data-a="nav" data-id="home">' + icon('home') +
-      ' Inicio de la demo</button><button class="button ghost sm" data-a="nav" data-id="demo-feedback-form">Opinar</button>' +
+      ' Inicio de la demo</button><button class="button ghost sm" data-a="nav" data-id="demo-feedback">Opinar</button>' +
       '<button class="button ghost sm" data-a="demoResetAsk">' + icon('retry') + ' Reiniciar</button></div></div>' +
       '<dialog id="demo-reset-dialog" class="demo-dialog card" aria-labelledby="demo-reset-title">' +
       '<h2 id="demo-reset-title">¿Reiniciar la demostración?</h2><p>Se borrarán únicamente los avances y borradores de la demo en este navegador. Los archivos que descargaste se conservan.</p>' +
@@ -88,7 +88,7 @@ window.XannyDemo = (() => {
   const ratings = ['Muy bueno', 'Bueno', 'Aceptable', 'Necesita mejorar', 'Tuvo problemas'];
   function feedback() {
     return '<h1 class="page-title">Tu opinión sobre la demo</h1><p class="page-desc">Todo es opcional. Descarga tus respuestas y comparte el archivo con quien te invitó si quieres.</p>' +
-      '<form id="demo-feedback" class="card demo-form" autocomplete="off">' +
+      '<form id="demo-feedback-form" class="card demo-form" autocomplete="off">' +
       '<p id="demo-feedback-privacy">Deja fuera nombres, correos y otros datos personales. Este formulario no envía tus respuestas.</p>' +
       '<div class="demo-ratings">' + Object.entries(ratingLabels).map(([key, label]) =>
         '<label><span>' + label + '</span><select class="field" name="' + key + '"><option value="">Sin responder</option>' +

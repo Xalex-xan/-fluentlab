@@ -186,6 +186,28 @@ async function run() {
     await toHome(page);
     await page.getByRole('button',{name:/Una entrevista en inglés/}).click();
     await page.getByText(/Decisión 1 de 3/i).waitFor();
+    const mission = await page.evaluate(() => {
+      const variant = JSON.parse(localStorage.getItem('xanny_demo_v1')).missionVariants['b1-interview'];
+      return MISSIONS.find(item => item.id === 'b1-interview').variants[variant];
+    });
+    for (const [index, question] of mission.questions.entries()) {
+      const layout = page.locator('.case-layout');
+      const answer = async choice => {
+        await layout.locator('[data-a="missionChoice"][data-index="' + choice + '"]').click();
+        await layout.getByRole('button',{name:'Comprobar respuesta'}).click();
+      };
+      if (index === 0) {
+        await answer((question.answer + 1) % question.choices.length);
+        await layout.getByText(question.hint).waitFor();
+      }
+      if (index === 2) await layout.getByText('NUEVO CONTEXTO',{exact:true}).waitFor();
+      await answer(question.answer);
+      assert.equal(await layout.locator('.option-explanations li').count(),question.choices.length);
+      await layout.locator('[data-a="missionNext"]').click();
+    }
+    await page.locator('#missionWrite').fill('I documented the issue and explained how we fixed it.');
+    await page.locator('[data-a="missionFinish"]').click();
+    await page.locator('.mission-summary').getByText('Misión finalizada').waitFor();
     await toHome(page);
     await page.getByRole('button',{name:/memoria/}).click();
     await page.locator('[data-a="flipCard"]').click();

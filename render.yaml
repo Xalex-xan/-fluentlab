@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: xanny-piloto
+    runtime: node
+    plan: free
+    branch: development/xanny-rc-cuentas
+    autoDeployTrigger: "off"
+    buildCommand: node --check tools/staging-server.cjs
+    startCommand: node tools/staging-server.cjs --render
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: XANNY_STAGING_PUBLISHABLE_KEY
+        sync: false
+      - key: XANNY_STAGING_ACCESS_FILE
+        value: /etc/secrets/access.json
+      - key: XANNY_STAGING_PRIVACY_JSON
+        value: /etc/secrets/privacy.json

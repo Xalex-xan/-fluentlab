@@ -1,12 +1,12 @@
-const RELEASE = '3.2.0';
+const RELEASE = '3.4.1';
 const CACHE_PREFIX = 'xanny-english-static-';
 const CACHE = CACHE_PREFIX + RELEASE;
 const PREVIOUS_CACHES = new Set(['fluentlab-static-3.1.0', 'fluentlab-static-v3-20261117']);
 const versioned = name => './' + name + '?v=' + RELEASE;
 const SHELL = './index.html';
 const assets = [
-  'styles.css', 'studio.css', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js',
+  'styles.css', 'studio.css', 'learning.css', 'data.js', 'question-bank.js', 'mission-transfer.js',
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'learning-ui.js', 'units-data.js', 'units.js', 'icons.svg', 'cloud-config.js', 'cloud.js', 'app.js',
   'favicon.svg', 'xanny.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'
 ];
 const scope = self.registration.scope;
@@ -15,6 +15,7 @@ const assetUrls = new Set(assets.map(name => new URL(versioned(name), scope).hre
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll([
     new Request(new URL(SHELL, scope), {cache: 'reload'}),
+    new Request(new URL('./privacy.html', scope), {cache: 'reload'}),
     ...assetUrls
   ])));
 });
@@ -31,7 +32,9 @@ self.addEventListener('fetch', event => {
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).catch(async () => {
       const cache = await caches.open(CACHE);
-      return await cache.match(new URL(SHELL, scope)) || Response.error();
+      const pathname = new URL(request.url).pathname;
+      const page = pathname === new URL('./privacy.html', scope).pathname ? './privacy.html' : SHELL;
+      return await cache.match(new URL(page, scope)) || Response.error();
     }));
   } else if (assetUrls.has(request.url)) {
     event.respondWith(caches.open(CACHE).then(async cache => await cache.match(request) || fetch(request)));

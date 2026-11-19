@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const files = Object.fromEntries([
   'index.html', 'manifest.webmanifest', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'learning-ui.js', 'units-data.js', 'units.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
 ].map(path => [path, readFileSync(join(__dirname, '..', path), 'utf8')]));
 const exists = path => existsSync(join(__dirname, '..', path));
 
@@ -22,9 +22,9 @@ function createTest(files, oldProgress) {
   };
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents[type]=fn};
   const run=Function('window','document','location','navigator','localStorage','setTimeout','URLSearchParams',
-    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,XANNY_EXTRA,XANNY_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
+    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["progress-sync.js"]+'\n'+files["learning-ui.js"]+'\n'+files["units-data.js"]+'\n'+files["units.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,XANNY_EXTRA,XANNY_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,UNIT_DATA,cloud:window.XannyCloud};');
   const data=run(window,document,location,{},localStorage,()=>{},class {has(){return false}});
-  return {...data,app,click:(a,d={})=>events.click.forEach(fn=>fn({target:{closest:()=>({dataset:{a,...d}})}})),
+  return {...data,app,click:(a,d={})=>events.click.forEach(fn=>fn({target:{closest:selector=>selector==='[data-a]'?({dataset:{a,...d}}):null}})),
     input:(id,value)=>events.input.forEach(fn=>fn({target:{id,value}})),navigate:(hash)=>{location.hash='#'+hash;windowEvents.hashchange();},
     change:(id,value)=>events.change.forEach(fn=>fn({target:{id,value}})), fields, stored:()=>JSON.parse(active.get('fluentlab_v1')||'null')};
 }
@@ -151,7 +151,7 @@ test('carga todo el catálogo, las rutas y las configuraciones públicas', () =>
   assert.equal(app.DATA.listening.length, 12);
   assert.equal(app.DATA.speaking.length, 16);
   assert.equal(app.DATA.writing.length, 8);
-  const sections = ['home','missions','path','listen','speak','cards','errors','progress','account','grammar','write','resources','settings','diagnostic'];
+  const sections = ['home','units','missions','path','listen','speak','cards','errors','progress','account','classroom','grammar','write','resources','settings','diagnostic'];
   for (const id of sections) {
     app.click('nav', {id});
     assert.ok(app.app.innerHTML.includes('<h1'), id);
@@ -247,4 +247,126 @@ test('el progreso agrupa errores por habilidad y conserva las sesiones recientes
   assert.equal(timeline.length, 40);
   assert.equal(timeline[0].missionId, '5');
   assert.equal(timeline.at(-1).missionId, '44');
+});
+
+test('C1 conserva sus preferencias y la portada ofrece microlecciones B2', () => {
+  const app = createTest(files, {version: 1, level: 'C1'});
+  assert.match(app.app.innerHTML, /Tu avance en B2/);
+  app.click('nav', {id: 'settings'});
+  assert.match(app.app.innerHTML, /<option selected>C1<\/option>/);
+  app.change('settingLevel', 'C2');
+  app.change('settingLevel', 'C1');
+  assert.equal(app.stored().level, 'C1');
+});
+
+test('el aula requiere configuración independiente y estudiar sin cuenta sigue disponible', () => {
+  const app = createTest(files);
+  assert.equal(app.cloud.classroomAvailable(), false);
+  app.click('nav', {id: 'classroom'});
+  assert.match(app.app.innerHTML, /El aula virtual está desactivada/);
+  app.click('nav', {id: 'missions'});
+  assert.match(app.app.innerHTML, /16 MISIONES/);
+});
+
+test('los datos de sincronización filtran respuestas privadas incluso en registros antiguos', () => {
+  const {StudyProfile} = createTest(files);
+  const copy = StudyProfile.snapshot({version:1, level:'C1', xp:10,
+    drafts:{sample:'privado'}, missionDrafts:{sample:'privado'},
+    missionErrors:{'a2-delivery/0/0':{times:2,last:'2026-11-01',answer:'Texto del alumno'}},
+    missionTimeline:[{missionId:'a2-delivery',date:'2026-11-01',mode:'course',first:2,
+      assisted:1,revealed:0,written:true,writing:'Respuesta privada'}]});
+  assert.equal(copy.missionErrors['a2-delivery/0/0'].times, 2);
+  assert.equal(copy.missionTimeline[0].written, true);
+  assert.doesNotMatch(JSON.stringify(copy), /privad|respuesta|texto del alumno/i);
+  const merged = StudyProfile.combine({version:1, level:'A2', xp:10, completed:{'a1-1':'2026-11-01'}},
+    {version:1, level:'C1', xp:15, completed:{'a1-2':'2026-11-02'}});
+  assert.deepEqual(Object.keys(merged.completed).sort(), ['a1-1','a1-2']);
+  assert.equal(merged.xp, 15);
+  assert.equal(merged.level, 'A2');
+});
+
+test('las 16 sesiones de unidades son completas, variables y revisables', () => {
+  const app = createTest(files);
+  const kinds = ['vocabulary','grammar','reading','listening','interaction','writing','review','assessment'];
+  assert.deepEqual(app.UNIT_DATA.map(unit => unit.level), ['B1','B2']);
+  const prompts = new Set();
+  for (const unit of app.UNIT_DATA) {
+    assert.deepEqual(unit.sessions.map(item => item.type), kinds);
+    for (const item of unit.sessions) {
+      assert.equal(item.questions.length, 5);
+      for (const q of item.questions) {
+        assert.ok(q.explanation.length > 35 && q.hint.length > 15);
+        assert.equal(prompts.has(q.prompt), false);
+        prompts.add(q.prompt);
+      }
+      const key = unit.id + '/' + item.id;
+      app.click('unitSession', {id:unit.id, session:item.id});
+      const attempt = app.stored().unitRecent[key];
+      const rounds = item.questions.filter(q => attempt.includes(q.id));
+      assert.equal(rounds.length, item.type === 'assessment' ? 4 : 3);
+      for (const [i,id] of attempt.entries()) {
+        const q = item.questions.find(q => q.id === id);
+        if (i === 0) app.click('unitHint');
+        if (q.type === 'word') app.input('unitShort',q.answers[0].toUpperCase());
+        if (q.type === 'order') q.parts.forEach((_,index) => app.click('unitToken',{index}));
+        if (q.type === 'choice') app.click('unitOption',{index:q.options.indexOf(q.answer)});
+        app.click('unitCheck');
+        assert.match(app.app.innerHTML, i === 0 ? /Acierto con ayuda/ : /Acierto inicial/);
+        app.click('unitNext');
+      }
+      if (item.writing) {
+        app.input('unitDraft','I recommend a cautious plan with a clear fallback.');
+        app.click('unitModel');
+        assert.match(app.app.innerHTML,/sin calificación lingüística/);
+        app.click('unitFinish');
+      }
+      const finished = app.stored();
+      const result = finished.unitSessions[key].free;
+      assert.equal(result.completed, 1);
+      assert.equal(result.assisted, 1);
+      assert.equal(result.first, attempt.length - 1);
+      assert.equal(result.written, item.writing ? 1 : 0);
+      assert.equal(finished.unitReviews[key].interval, 1);
+      if (item.type === 'assessment') assert.match(app.app.innerHTML,/Unidad completada/);
+      app.click('unitSession', {id:unit.id,session:item.id});
+      assert.ok(app.stored().unitRecent[key].some(id => !attempt.includes(id)));
+    }
+  }
+  assert.equal(prompts.size, 80);
+  assert.match(app.app.innerHTML,/data-a="unitOpen"/);
+  const snapshot = app.StudyProfile.snapshot(app.stored());
+  assert.equal(Object.keys(snapshot.unitSessions).length, 16);
+  assert.equal(Object.hasOwn(snapshot, 'unitDrafts'), false);
+  assert.doesNotMatch(JSON.stringify(snapshot), /I recommend a cautious plan/);
+});
+
+test('las unidades contabilizan la transcripción como ayuda y el curso exige escritura', () => {
+  const app = createTest(files, {version:1, learningMode:'course'});
+  const unit = app.UNIT_DATA[0];
+  const answer = item => {
+    const key = unit.id + '/' + item.id;
+    for (const id of app.stored().unitRecent[key]) {
+      const q = item.questions.find(q => q.id === id);
+      if (q.type === 'word') app.input('unitShort',q.answers[0]);
+      if (q.type === 'order') q.parts.forEach((_,index) => app.click('unitToken',{index}));
+      if (q.type === 'choice') app.click('unitOption',{index:q.options.indexOf(q.answer)});
+      app.click('unitCheck');
+      app.click('unitNext');
+    }
+  };
+  const listen = unit.sessions.find(item => item.type === 'listening');
+  app.click('unitSession',{id:unit.id,session:listen.id});
+  app.click('unitTranscript');
+  answer(listen);
+  const result = app.stored().unitSessions[unit.id+'/audio'].course;
+  assert.equal(result.first,0);
+  assert.equal(result.assisted,3);
+  const write = unit.sessions.find(item => item.type === 'writing');
+  app.click('unitSession',{id:unit.id,session:write.id});
+  answer(write);
+  app.click('unitFinish');
+  assert.equal(app.stored().unitSessions[unit.id+'/writing'],undefined);
+  app.input('unitDraft','Could you confirm the time we can collect the key?');
+  app.click('unitFinish');
+  assert.equal(app.stored().unitSessions[unit.id+'/writing'].course.written,1);
 });

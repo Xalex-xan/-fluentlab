@@ -1,0 +1,25 @@
+[Unit]
+Description=Aprende con Xanny - ensayo HTTPS privado
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xanny-staging
+Group=xanny-staging
+WorkingDirectory=/opt/xanny-staging
+EnvironmentFile=/etc/xanny-staging/preview.env
+ExecStart=/usr/bin/node /opt/xanny-staging/tools/staging-server.cjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+UMask=0077
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

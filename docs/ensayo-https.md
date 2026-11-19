@@ -7,6 +7,12 @@ independiente.
 
 ## Despliegue privado
 
+La [comparación de costos y requisitos](opciones-piloto.md) recomienda
+Render Free para el piloto. La [guía operativa](operar-piloto.md) reúne el
+despliegue, el aviso, los dos buzones y la matriz de pruebas. El procedimiento
+de esta sección sirve para un host Linux que administra su propio TLS.
+
+
 Usa un host reservado para el piloto con Node.js 22 o posterior, DNS y un
 certificado válido. En Linux, la unidad `deploy/xanny-staging.service` ejecuta
 el servicio como usuario dedicado. El proceso termina TLS y exige un acceso
@@ -62,16 +68,10 @@ Los secretos SMTP se introducen en Supabase. Los secretos de acceso al
 servidor y TLS se guardan en el host. En GitHub se versionan únicamente las
 plantillas vacías.
 
-El control del sitio y el alta de Supabase son distintos. La migración
-nueva `supabase_pilot_signup_gate.sql` añade el hook **Before User Created** y
-una lista privada de buzones. Instálala solo una vez si aún falta en el
-historial. Carga los buzones aprobados en
-`xanny_private.pilot_mailboxes` desde el SQL Editor de administración,
-normalizados en minúsculas y fuera del control de versiones. Selecciona
-`public.xanny_pilot_before_signup` en Authentication → Hooks. Una lista
-vacía bloquea las altas cuando el hook está habilitado. Comprueba también
-las cuentas ya existentes, porque el hook actúa al crear un usuario.
-Confirma que los otros ajustes de Auth de ese proyecto no amplían la audiencia.
+El hook `xanny_pilot_before_signup` y su lista privada ya existen en
+**xanny-dev**. Usa el [orden de activación para dos buzones](operar-piloto.md#3-configurar-correo-agregar-los-dos-buzones-y-habilitar-el-hook).
+El correo externo se configura primero y las altas permanecen cerradas
+hasta verificar la lista y seleccionar el hook.
 
 [SMTP de Supabase](https://supabase.com/docs/guides/auth/auth-smtp) ·
 [Redirecciones de Auth](https://supabase.com/docs/guides/auth/redirect-urls) ·
@@ -121,7 +121,8 @@ sin acceso anónimo a datos protegidos, sin invocación anónima de RPC
 privilegiados y sin escritura desde el navegador en las tablas de roles.
 El asesor mantiene 13 avisos de RPC autenticados con `SECURITY DEFINER`
 y ocho avisos informativos de RLS sin política en tablas de acceso interno.
-Los RPC privilegiados fijan `search_path` y verifican identidad; los del
+La [auditoría individual y sus tres cambios propuestos](auditoria-piloto.md)
+detalla los límites de los accesos. Los RPC fijan `search_path` y verifican identidad. Los del
 aula verifican pertenencia o autoridad. Revisar un RPC nuevo incluye probar
 que los roles ajenos siguen sin acceso.
 

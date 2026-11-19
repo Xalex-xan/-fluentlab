@@ -17,7 +17,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Pruebas de lógica y compatibilidad
-        run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs tests/privacy-notice.test.cjs
+        run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs tests/privacy-notice.test.cjs tests/render-staging.test.cjs
       - name: Preparar Playwright para Chrome del runner
         run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 axe-core@4.11.1
       - name: Probar escritorio, móvil y Service Worker
@@ -29,11 +29,12 @@ jobs:
           sudo -u postgres createdb xanny_verify
           fixtures=$(mktemp -d)
           chmod 755 "$fixtures"
-          install -m 644 supabase_setup.sql supabase_aula_33.sql supabase_progress_sync.sql "$fixtures/"
+          install -m 644 supabase_setup.sql supabase_aula_33.sql supabase_progress_sync.sql supabase_pilot_hardening.sql "$fixtures/"
           install -D -m 644 tests/schema.sql "$fixtures/tests/schema.sql"
           install -m 644 tests/aula.sql "$fixtures/tests/aula.sql"
           install -m 644 tests/sync-schema.sql "$fixtures/tests/sync-schema.sql"
-          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/sync-schema.sql"
+          install -m 644 tests/pilot-security.sql "$fixtures/tests/pilot-security.sql"
+          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/pilot-security.sql"
   pages:
     if: github.ref == 'refs/heads/main'
     needs: verify
@@ -96,6 +97,7 @@ jobs:
           cp supabase_aula_33.sql supabase/migrations/20261118000000_aula.sql
           cp supabase_progress_sync.sql supabase/migrations/20261119000000_sync.sql
           cp supabase_pilot_signup_gate.sql supabase/migrations/20261120000000_pilot_gate.sql
+          cp supabase_pilot_hardening.sql supabase/migrations/20261120000001_pilot_hardening.sql
           if ! npx --yes supabase@2.75.0 start > "$RUNNER_TEMP/xanny-supabase.log" 2>&1; then
             sed -n -E '/(failed|Error|ERROR|denied|rate limit)/p' "$RUNNER_TEMP/xanny-supabase.log" | tail -15
             exit 1

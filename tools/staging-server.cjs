@@ -1,4 +1,5 @@
-const {createServer} = require('node:https');
+const http = require('node:http');
+const https = require('node:https');
 const {createHash, timingSafeEqual} = require('node:crypto');
 const {readFile} = require('node:fs/promises');
 const {join, extname} = require('node:path');
@@ -38,18 +39,24 @@ function accessGate(access) {
   };
 }
 
-function createStagingServer({tls, origin, config, privacyHtml, access}) {
+function stagingHandler({origin, config, privacyHtml, access}, renderEdge) {
   const target = new URL(origin);
   if (target.protocol !== 'https:' || !privacyHtml) throw Error('Se requiere HTTPS y un aviso de privacidad.');
   const authorized = accessGate(access);
   const bootConfig = 'window.XANNY_CLOUD_CONFIG = ' + JSON.stringify({...config,privateStaging:true});
-  return createServer({...tls, maxHeaderSize:8192}, async (request, response) => {
+  return async (request, response) => {
     const headers = {
       'Cache-Control':'private, no-store', 'Vary':'Authorization', 'Referrer-Policy':'no-referrer',
       'X-Content-Type-Options':'nosniff', 'X-Frame-Options':'DENY',
       'X-Robots-Tag':'noindex, nofollow', 'Strict-Transport-Security':'max-age=86400'
     };
     if (request.headers.host !== target.host) return response.writeHead(421, headers).end();
+    if (renderEdge && request.url === '/healthz' && ['GET','HEAD'].includes(request.method)) {
+      return response.writeHead(204, headers).end();
+    }
+    if (renderEdge && request.headers['x-forwarded-proto'] !== 'https') {
+      return response.writeHead(403, headers).end();
+    }
     if (!authorized(request.headers.authorization)) {
       return response.writeHead(401, {...headers,'WWW-Authenticate':'Basic realm="Xanny ensayo", charset="UTF-8"'}).end();
     }
@@ -74,19 +81,32 @@ function createStagingServer({tls, origin, config, privacyHtml, access}) {
     } catch {
       response.writeHead(404, headers).end();
     }
-  });
+  };
+}
+
+function createStagingServer({tls, ...options}) {
+  return https.createServer({...tls, maxHeaderSize:8192}, stagingHandler(options, false));
+}
+
+function createRenderStagingServer(options) {
+  return http.createServer({maxHeaderSize:8192}, stagingHandler(options, true));
 }
 
 async function main() {
   const env = process.env;
-  const origin = new URL(env.XANNY_STAGING_ORIGIN || '');
+  const render = process.argv.includes('--render');
+  if (render && env.RENDER !== 'true') throw Error('El modo Render requiere su proxy HTTPS gestionado.');
+  const origin = new URL((render ? env.RENDER_EXTERNAL_URL : env.XANNY_STAGING_ORIGIN) || '');
+  if (render && (!origin.hostname.endsWith('.onrender.com') || origin.port)) {
+    throw Error('Usa el origen HTTPS onrender.com del servicio de ensayo.');
+  }
   const key = env.XANNY_STAGING_PUBLISHABLE_KEY || '';
   if (origin.protocol !== 'https:' || origin.hostname.endsWith('.github.io') || origin.pathname !== '/' ||
     origin.username || origin.password || origin.search || origin.hash || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
     throw Error('Configura un origen HTTPS separado y la clave publicable de xanny-dev.');
   }
-  const [cert, privateKey, template, ownerFile, accessFile] = await Promise.all([
-    readFile(env.XANNY_TLS_CERT), readFile(env.XANNY_TLS_KEY), readFile(join(root,'privacy.html'),'utf8'),
+  const [template, ownerFile, accessFile] = await Promise.all([
+    readFile(join(root,'privacy.html'),'utf8'),
     readFile(env.XANNY_STAGING_PRIVACY_JSON,'utf8'), readFile(env.XANNY_STAGING_ACCESS_FILE,'utf8')
   ]);
   const privacyHtml = renderPrivacyNotice(template, JSON.parse(ownerFile));
@@ -96,10 +116,18 @@ async function main() {
     studyAnalyticsEnabled:false, visitorAnalyticsEnabled:false,
     supabaseUrl:devProject, publishableKey:key, privacyPolicyUrl:new URL('/privacy.html',origin).href
   };
-  const port = Number(env.XANNY_STAGING_PORT || origin.port || 443);
-  const bind = env.XANNY_STAGING_BIND || '127.0.0.1';
+  const port = Number(render ? env.PORT : env.XANNY_STAGING_PORT || origin.port || 443);
+  const bind = render ? '0.0.0.0' : env.XANNY_STAGING_BIND || '127.0.0.1';
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Puerto de ensayo inválido.');
-  createStagingServer({tls:{cert,key:privateKey},origin:origin.origin,config,privacyHtml,access}).listen(port,bind,() => {
+  const options = {origin:origin.origin,config,privacyHtml,access};
+  let server;
+  if (render) {
+    server = createRenderStagingServer(options);
+  } else {
+    const [cert, privateKey] = await Promise.all([readFile(env.XANNY_TLS_CERT), readFile(env.XANNY_TLS_KEY)]);
+    server = createStagingServer({...options,tls:{cert,key:privateKey}});
+  }
+  server.listen(port,bind,() => {
     console.log('Servidor HTTPS privado de ensayo listo en ' + origin.origin);
   });
 }
@@ -109,4 +137,4 @@ if (require.main === module) main().catch(error => {
   console.error(error instanceof SyntaxError ? 'Un archivo JSON de configuración no es válido.' : error.message);
   process.exitCode = 1;
 });
-module.exports = {createStagingServer};
+module.exports = {createStagingServer, createRenderStagingServer};

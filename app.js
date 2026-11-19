@@ -3,6 +3,8 @@
 // Conserva la clave histórica para recuperar el progreso existente en el mismo sitio.
 const KEY='fluentlab_v1';
 let progressKey = KEY;
+const activeAccountKey = KEY + ':active-account';
+let progressSync, syncSession, lastLocalRecord;
 let storageOK=true;
 const sections=[['home','Inicio','⌂'],['missions','Misiones reales','◈'],['path','Mi ruta','◈'],['listen','Escuchar','◉'],['speak','Hablar','◌'],['cards','Tarjetas','▣'],['errors','Mis errores','↻'],['progress','Mi progreso','▥'],['account','Mi cuenta','♙'],['classroom','Aula virtual','▧'],['grammar','Gramática','✳'],['write','Escribir','✎'],['resources','Biblioteca','▤'],['settings','Ajustes','⚙']];
 const defaults=()=>({version:1,level:'A2',goal:3,accent:'en-US',theme:'dark',xp:0,completed:{},wins:{},listeningDone:{},speakingDone:{},writingDone:{},srs:{},reviewRewarded:{},days:{},drafts:{},placementHistory:[],recentQuestions:{},errorLog:{},lastListen:{},missionHistory:{},missionSkills:{},missionDrafts:{},learningMode:'free',missionVariants:{},missionErrors:{},missionReviews:{},missionResults:{},missionTimeline:[]});
@@ -23,20 +25,37 @@ function normalizeProgress(saved) {
   value.level = StudyProfile.levels.includes(value.level) ? value.level : base.level;
   return value;
 }
-let ui={classroomData:null,classroomBusy:false,classroomMessage:'',classroomReport:null,reportGroup:null,analyticsConsent:false,page:new URLSearchParams(location.search).has('auth')?'account':(location.hash.startsWith('#access_token=')?'account':location.hash.replace('#','')||'home'),pathFilter:'Todos',grammarFilter:'Todos',resourceFilter:'Todos',pathSearch:'',lesson:null,listenIndex:Math.max(0,DATA.listening.findIndex(l=>l.level===progress.level)),listenChoice:null,listenChecked:false,listenAttempts:0,listenWrong:[],listenQuiz:null,showTranscript:false,speakIndex:Math.max(0,DATA.speaking.findIndex(l=>l.level===progress.level)),speakText:'',speakFeedback:null,speaking:false,reviewQueue:null,cardFlipped:false,reviewCount:0,reviewSuccess:0,writeIndex:Math.max(0,DATA.writing.findIndex(l=>l.level===progress.level)),writeFeedback:null,diagnostic:null,resetArmed:false,mission:null,missionFilter:'Todos',cloudBusy:false,cloudUser:null,cloudProfile:null,cloudNotice:'',teacherStats:null,teacherRoster:null};
+let ui={syncState:{kind:'pending'},syncName:'Estudiante',cachedAccount:false,deletionRequested:false,classroomData:null,classroomBusy:false,classroomMessage:'',classroomReport:null,reportGroup:null,analyticsConsent:false,page:new URLSearchParams(location.search).has('auth')?'account':(location.hash.startsWith('#access_token=')?'account':location.hash.replace('#','')||'home'),pathFilter:'Todos',grammarFilter:'Todos',resourceFilter:'Todos',pathSearch:'',lesson:null,listenIndex:Math.max(0,DATA.listening.findIndex(l=>l.level===progress.level)),listenChoice:null,listenChecked:false,listenAttempts:0,listenWrong:[],listenQuiz:null,showTranscript:false,speakIndex:Math.max(0,DATA.speaking.findIndex(l=>l.level===progress.level)),speakText:'',speakFeedback:null,speaking:false,reviewQueue:null,cardFlipped:false,reviewCount:0,reviewSuccess:0,writeIndex:Math.max(0,DATA.writing.findIndex(l=>l.level===progress.level)),writeFeedback:null,diagnostic:null,resetArmed:false,mission:null,missionFilter:'Todos',cloudBusy:false,cloudUser:null,cloudNotice:'',teacherStats:null,teacherRoster:null};
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const day=(date=new Date())=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const plusDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return day(d)};
 function load(key = progressKey) {
   try {
-    return normalizeProgress(JSON.parse(localStorage.getItem(key) || '{}'));
+    const raw = localStorage.getItem(key);
+    if (key === progressKey) lastLocalRecord = raw;
+    return normalizeProgress(JSON.parse(raw || '{}'));
   } catch (error) {
     storageOK = false;
     return defaults();
   }
 }
-function save(){try{localStorage.setItem(progressKey,JSON.stringify(progress))}catch(e){storageOK=false}}
+function save(sync = true) {
+  try {
+    const raw = JSON.stringify(progress);
+    const previous = localStorage.getItem(progressKey);
+    if (previous && previous !== lastLocalRecord && previous !== raw) localStorage.setItem(progressKey + ':other-tab', previous);
+    localStorage.setItem(progressKey, raw);
+    lastLocalRecord = raw;
+    storageOK = true;
+    if (sync) progressSync?.queue();
+    return true;
+  } catch {
+    storageOK = false;
+    setSyncState({kind: navigator.onLine === false ? 'offline' : 'error'});
+    return false;
+  }
+}
 function toast(msg){document.querySelector('.toast')?.remove();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent=msg;document.body.append(t);setTimeout(()=>t.remove(),3100)}
 function activity(xp=0){progress.xp+=xp;progress.days[day()]=(progress.days[day()]||0)+1;save()}
 function awardOnce(bucket,id,xp){if(progress[bucket][id])return false;progress[bucket][id]=day();activity(xp);return true}
@@ -73,11 +92,11 @@ function mobileNav() {
   return `<nav class="mobile-nav" aria-label="Navegación móvil">${sections.filter(([id]) => shortcuts.includes(id)).map(([id, label, icon]) => `<button type="button" class="mobile-shortcut ${ui.page === id ? 'active' : ''}" data-a="nav" data-id="${id}" aria-label="${label}" aria-current="${ui.page === id ? 'page' : 'false'}"><b aria-hidden="true">${icon}</b>${short[id]}</button>`).join('')}<details class="mobile-more"><summary class="mobile-shortcut"><b aria-hidden="true">☰</b>Menú</summary><div class="mobile-menu-panel" aria-label="Todas las secciones">${links}<button type="button" class="nav-btn" data-a="nav" data-id="diagnostic">Diagnóstico</button></div></details></nav>`;
 }
 const meta=()=>`<div class="topbar"><div class="breadcrumb"><span class="breadcrumb-brand">Aprende con Xanny</span><span class="subtle" aria-hidden="true"> / </span> <strong>${sections.find(s=>s[0]===ui.page)?.[1]||'Mi ruta'}</strong></div><div class="toolbar"><span class="pill">🔥 ${streak()} ${streak()===1?'día':'días'}</span><span class="pill">✦ ${progress.xp} XP</span><button class="pill accent" data-a="nav" data-id="settings" aria-label="Cambiar nivel">${esc(progress.level)} <span aria-hidden="true">⌄</span></button></div></div>`;
-function shell(content){document.body.classList.toggle('light',progress.theme==='light');$('app').innerHTML=`<div class="layout"><aside class="sidebar"><a class="brand" href="#home" aria-label="Aprende con Xanny, inicio"><img class="brand-icon" src="xanny.svg?v=3.3.0" alt="" width="46" height="46"><div class="brand-copy"><span class="brand-text">Aprende con <strong>Xanny</strong></span><span class="brand-sub" lang="en">Xanny English Lab</span></div></a><div class="nav-head">Tu espacio</div><nav class="nav" aria-label="Menú principal">${navHtml()}</nav><div class="side-spacer"></div><div class="side-tip"><div class="star">✦</div><strong>Pequeños pasos. Gran progreso.</strong><p>Escucha, responde, equivócate y vuelve a intentarlo. Así se construye fluidez.</p><button class="mini-link button ghost sm" data-a="nav" data-id="diagnostic">Hacer diagnóstico →</button></div></aside><main class="main">${meta()}<div class="page" tabindex="-1">${content}</div><div class="footer">Aprende con Xanny · <a href="#resources">Fuentes y recursos</a></div></main>${mobileNav()}</div>`}
+function shell(content){document.body.classList.toggle('light',progress.theme==='light');$('app').innerHTML=`<div class="layout"><aside class="sidebar"><a class="brand" href="#home" aria-label="Aprende con Xanny, inicio"><img class="brand-icon" src="xanny.svg?v=3.3.1" alt="" width="46" height="46"><div class="brand-copy"><span class="brand-text">Aprende con <strong>Xanny</strong></span><span class="brand-sub" lang="en">Xanny English Lab</span></div></a><div class="nav-head">Tu espacio</div><nav class="nav" aria-label="Menú principal">${navHtml()}</nav><div class="side-spacer"></div><div class="side-tip"><div class="star">✦</div><strong>Pequeños pasos. Gran progreso.</strong><p>Escucha, responde, equivócate y vuelve a intentarlo. Así se construye fluidez.</p><button class="mini-link button ghost sm" data-a="nav" data-id="diagnostic">Hacer diagnóstico →</button></div></aside><main class="main">${meta()}<div class="page" tabindex="-1">${content}</div><div class="footer">Aprende con Xanny · <a href="#resources">Fuentes y recursos</a></div></main>${mobileNav()}</div>`}
 function heading(k,title,desc){return `<div class="section-label">${k}</div><h1 class="page-title">${title}</h1><p class="page-desc">${desc}</p>`}
 function progressBar(a,b){return `<div class="progress" role="progressbar" aria-valuenow="${a}" aria-valuemin="0" aria-valuemax="${b}"><span style="width:${pct(a,b)}%"></span></div>`}
 function home(){const finished=count(progress.completed),dayTasks=goalDone(),lessonLevel=progress.level==='C1'?'B2':progress.level,levelLessons=DATA.lessons.filter(l=>l.level===lessonLevel),chosen=levelLessons.find(l=>!progress.completed[l.id])||levelLessons[0];const tasks=[['Termina una microlección','Aprende una idea y úsala de inmediato.','path','📗',Object.values(progress.completed).some(v=>v===day())],['Escucha una conversación','Entrena tu oído con una pregunta real.','listen','🎧',Object.values(progress.listeningDone).some(v=>v===day())],['Repasa vocabulario','Recuerda palabras sin mirar primero.','cards','🧠',Object.values(progress.reviewRewarded).some(v=>v===day())]];
-return `${!storageOK?'<div class="notice mb"><strong>Almacenamiento restringido:</strong> este navegador no permite guardar el progreso automáticamente en este contexto. Exporta tus datos desde Ajustes, o abre el sitio publicado mediante HTTPS.</div>':''}<div class="hero"><div><h1>Aprende con <em>Xanny</em></h1><p>Practica inglés para situaciones reales. Entrena tu oído, amplía tu vocabulario y gana confianza para conversar.</p><div class="button-group"><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Continuar mi ruta <span>↗</span></button><button class="button white" data-a="nav" data-id="listen">Practicar escucha ◉</button></div></div><figure class="hero-art xanny-hero"><img src="xanny.svg?v=3.3.0" alt="Gato negro de ojos dorados y pañuelo violeta" width="224" height="224"><figcaption>Xanny</figcaption></figure></div>
+return `${!storageOK?'<div class="notice mb"><strong>Almacenamiento restringido:</strong> este navegador no permite guardar el progreso automáticamente en este contexto. Exporta tus datos desde Ajustes, o abre el sitio publicado mediante HTTPS.</div>':''}<div class="hero"><div><h1>Aprende con <em>Xanny</em></h1><p>Practica inglés para situaciones reales. Entrena tu oído, amplía tu vocabulario y gana confianza para conversar.</p><div class="button-group"><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Continuar mi ruta <span>↗</span></button><button class="button white" data-a="nav" data-id="listen">Practicar escucha ◉</button></div></div><figure class="hero-art xanny-hero"><img src="xanny.svg?v=3.3.1" alt="Gato negro de ojos dorados y pañuelo violeta" width="224" height="224"><figcaption>Xanny</figcaption></figure></div>
 <section class="next-mission home-feature"><div><div class="section-label">⚡ LAB DE SITUACIONES REALES</div><h2>El inglés se aprende usándolo.</h2><p>Entrevistas, reclamos, acuerdos, tecnología, argumentación y casos C1. Una situación alternativa en la siguiente práctica, con pistas y explicaciones.</p></div><button class="button primary" data-a="nav" data-id="missions">Explorar misiones ↗</button></section><div class="home-coach"><div><span class="section-label">✦ TU COACH DE APRENDIZAJE</span><h3>${pendingErrors()?`Tienes ${pendingErrors()} conceptos por reforzar`:'Equivocarte también es avanzar'}</h3><p>Practica, recibe pistas y descubre por qué una respuesta es correcta. Repetir con variaciones te ayuda a comprender.</p></div><button class="button" data-a="nav" data-id="errors">Ver mis errores ↗</button></div><div class="stats"><div class="stat spark"><div class="stat-icon">⚡</div><div class="value">${progress.xp}</div><div class="label">Puntos de práctica</div></div><div class="stat"><div class="stat-icon">🔥</div><div class="value">${streak()}</div><div class="label">Días de racha</div></div><div class="stat"><div class="stat-icon">✅</div><div class="value">${finished}<span class="small subtle">/${DATA.lessons.length}</span></div><div class="label">Lecciones terminadas</div></div><div class="stat"><div class="stat-icon">🧠</div><div class="value">${matureCards()}</div><div class="label">Palabras consolidadas*</div></div></div>
 <div class="grid grid-2 mt"><section class="card"><div class="between mb-sm"><h2 class="section-h" style="margin:0">Misiones de hoy</h2><span class="tag green">${dayTasks}/${progress.goal} objetivo</span></div>${progressBar(Math.min(dayTasks,progress.goal),progress.goal)}<div class="mt">${tasks.map(([title,sub,target,icon,done])=>`<div class="task"><div class="task-icon">${icon}</div><div class="task-main"><h3>${title}</h3><p>${sub}</p></div>${done?'<span class="checkmark" title="Completada">✓</span>':`<button class="button sm" data-a="nav" data-id="${target}">Ir ↗</button>`}</div>`).join('')}</div></section><section class="card"><div class="between mb-sm"><h2 class="section-h" style="margin:0">Tu avance en ${lessonLevel}</h2><span class="tag blue">MCER</span></div><p class="subtle small">${levelLessons.filter(l=>progress.completed[l.id]).length} de ${levelLessons.length} lecciones completadas</p>${progressBar(levelLessons.filter(l=>progress.completed[l.id]).length,levelLessons.length)}<div class="mt"><div class="between"><div><span class="tag">PRÓXIMA CLASE</span><h3 style="font:800 23px var(--heading);margin:9px 0 5px">${chosen.icon} ${chosen.title}</h3><p class="small subtle" style="margin:0 0 15px">${chosen.objective}</p></div></div><button class="button primary" data-a="openLesson" data-id="${chosen.id}">Empezar lección ↗</button></div><div class="divider"></div><div class="between"><span class="small subtle">¿No sabes tu nivel?</span><button class="button ghost sm" data-a="nav" data-id="diagnostic">Prueba orientativa →</button></div></section></div>
 <div class="grid grid-3 mt"><div class="study-box"><span style="font-size:25px">🎧</span><h3>Entrena el oído</h3><p>Escucha dos veces, identifica la idea principal y luego revisa el texto.</p><button class="button ghost sm mt" data-a="nav" data-id="listen">Ir a listening ↗</button></div><div class="study-box"><span style="font-size:25px">🎤</span><h3>Habla sin miedo</h3><p>Escucha frases, repítelas y compara lo que reconoce el navegador.</p><button class="button ghost sm mt" data-a="nav" data-id="speak">Practicar speaking ↗</button></div><div class="study-box"><span style="font-size:25px">✍️</span><h3>Pasa de entender a crear</h3><p>Escribe textos cortos con sugerencias básicas para corregirte.</p><button class="button ghost sm mt" data-a="nav" data-id="write">Escribir ↗</button></div></div><p class="note mt">*Palabras consolidadas = tarjetas cuyo intervalo de repaso alcanza 7 días; no es una certificación de dominio.</p>`}
@@ -379,8 +398,14 @@ function recordCloudEvent(type, id, score) {
 function switchWorkspace(user) {
   const key = user ? KEY + ':account:' + user.id : KEY;
   if (key === progressKey) return;
+  progressSync?.stop();
+  progressSync = null;
+  syncSession = null;
+  ui.syncState = {kind:'pending'};
+  ui.deletionRequested = false;
   progressKey = key;
   progress = load();
+  ui.syncName = user ? cleanAlias(readBrowserValue(key + ':alias')) : 'Estudiante';
   ui.lesson = null;
   ui.mission = null;
   ui.diagnostic = null;
@@ -419,8 +444,9 @@ async function refreshCloudUser() {
     const previous = ui.cloudUser?.id;
     ui.cloudUser = await cloud.currentUser();
     switchWorkspace(ui.cloudUser);
+    ui.cachedAccount = false;
+    rememberActiveAccount(ui.cloudUser?.id);
     if (previous !== ui.cloudUser?.id) {
-      ui.cloudProfile = null;
       ui.analyticsConsent = false;
     }
     if (!ui.cloudUser) {
@@ -440,15 +466,83 @@ async function refreshCloudUser() {
           ui.classroomMessage = 'No se pudo consultar el aula. Puedes volver a intentarlo.';
         }
       }
-      if (ui.page === 'account') ui.cloudProfile = await cloud.readProfile();
+      if (!progressSync) startProgressSync(ui.cloudUser.id);
+      else if (ui.syncState.login) void progressSync.check();
+      if (ui.page === 'account') ui.deletionRequested = await syncSession.readDeletion().catch(() => ui.deletionRequested);
     }
     ui.cloudNotice = '';
   } catch {
-    ui.cloudNotice = 'No se pudo verificar la sesión o consultar la copia en la nube.';
+    ui.cloudNotice = 'No se pudo verificar la sesión. El historial de este navegador sigue disponible.';
+    if (!ui.cloudUser) loadCachedAccount();
   } finally {
     ui.cloudBusy = false;
     if (progressKey !== oldKey || ui.page === 'account' || ui.page === 'classroom') render();
   }
+}
+
+
+function readBrowserValue(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function rememberActiveAccount(account) {
+  try {
+    if (account) localStorage.setItem(activeAccountKey, account);
+    else localStorage.removeItem(activeAccountKey);
+  } catch {}
+}
+
+function loadCachedAccount() {
+  const id = readBrowserValue(activeAccountKey);
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id || '')) return;
+  switchWorkspace({id});
+  ui.cachedAccount = true;
+  setSyncState({kind: navigator.onLine === false ? 'offline' : 'error'});
+}
+
+function cleanAlias(value) {
+  return String(value || '').trim().slice(0,60) || 'Estudiante';
+}
+
+function displaySyncStatus() {
+  const state = ui.syncState;
+  const label = $('accountSyncStatus');
+  if (label) {
+    label.textContent = ProgressSync.labels[state.kind];
+    label.dataset.state = state.kind;
+  }
+  const help = $('accountSyncHelp');
+  if (help) {
+    help.textContent = state.login ? 'Vuelve a iniciar sesión. Tus cambios pendientes siguen aquí.' :
+      state.conflict ? 'Hay otra copia guardada. Elige qué historial usar antes de continuar.' :
+      state.kind === 'offline' ? 'Tu avance se guarda aquí hasta recuperar la conexión.' :
+      state.kind === 'error' ? 'Tu historial local sigue disponible. Puedes volver a intentar la sincronización.' :
+      state.updatedAt ? 'Última copia confirmada: ' + new Date(state.updatedAt).toLocaleString('es') :
+      'Se sincroniza automáticamente cuando hay conexión.';
+  }
+  const choices = $('accountSyncConflict');
+  if (choices) {
+    choices.hidden = !state.conflict;
+    $('accountConflictDate').textContent = state.remoteDate ? 'Copia remota del ' + new Date(state.remoteDate).toLocaleString('es') :
+      'La copia remota ya no está disponible.';
+    $('accountConflictRestore').disabled = !state.remoteRevision || state.kind === 'offline';
+    $('accountConflictKeep').disabled = state.kind === 'offline';
+  }
+  const login = $('accountSyncLogin');
+  if (login) login.hidden = !state.login;
+  const backup = $('accountUndo');
+  if (backup) backup.hidden = !canRestorePrevious();
+  const otherTab = $('accountOtherTab');
+  if (otherTab) otherTab.hidden = !readBrowserValue(progressKey + ':other-tab');
+  const nickname = $('accountNickname');
+  if (nickname && document.activeElement !== nickname && nickname.dataset.touched !== 'true') nickname.value = ui.syncName;
+  const level = $('accountLevel');
+  if (level && document.activeElement !== level && level.dataset.touched !== 'true') level.value = progress.level;
+}
+
+function setSyncState(state) {
+  ui.syncState = state;
+  displaySyncStatus();
 }
 
 function recoveryKey() {
@@ -456,23 +550,88 @@ function recoveryKey() {
 }
 
 function canRestorePrevious() {
-  try { return Boolean(localStorage.getItem(recoveryKey())); } catch { return false; }
+  return Boolean(readBrowserValue(recoveryKey()));
 }
 
-function replaceStudyProgress(snapshot) {
-  // El respaldo previo se conserva en este navegador, por cuenta.
-  localStorage.setItem(recoveryKey(), JSON.stringify(StudyProfile.snapshot(progress)));
-  progress = normalizeProgress({...progress, ...snapshot});
+function currentProfile() {
+  return {nickname: ui.syncName, snapshot: StudyProfile.snapshot(progress)};
+}
+
+function archiveProfile(profile) {
+  localStorage.setItem(recoveryKey(), JSON.stringify(profile));
+}
+
+function setProfileName(value) {
+  const name = cleanAlias(value);
+  localStorage.setItem(progressKey + ':alias', name);
+  ui.syncName = name;
+}
+
+function applyStudyProfile(payload, previous, allowSync) {
+  archiveProfile(previous);
+  const next = normalizeProgress({...progress, ...payload.snapshot});
+  const raw = JSON.stringify(next);
+  localStorage.setItem(progressKey, raw);
+  localStorage.setItem(progressKey + ':alias', cleanAlias(payload.nickname));
+  lastLocalRecord = raw;
+  storageOK = true;
+  progress = next;
+  ui.syncName = cleanAlias(payload.nickname);
   ui.reviewQueue = null;
-  save();
+  if (allowSync) progressSync?.queue();
+  if (ui.page === 'home' || ui.page === 'progress') render();
+}
+
+function startProgressSync(account) {
+  const scope = progressKey;
+  const session = XannyCloud.bindProgress(account);
+  syncSession = session;
+  progressSync = ProgressSync.create({
+    online: () => navigator.onLine !== false,
+    readLocal: currentProfile,
+    hasLocal: () => Boolean(readBrowserValue(scope) || readBrowserValue(scope + ':alias')),
+    readMeta: () => {
+      try { return JSON.parse(readBrowserValue(scope + ':sync') || '{}'); } catch { return {}; }
+    },
+    writeMeta: meta => localStorage.setItem(scope + ':sync', JSON.stringify(meta)),
+    readRemote: session.read,
+    writeRemote: (value, revision) => {
+      if (scope !== progressKey || !storageOK) throw Error('La copia local no se pudo guardar.');
+      return session.write(value, revision);
+    },
+    convertRemote: row => ({nickname: cleanAlias(row.nickname), snapshot: StudyProfile.snapshot(
+      normalizeProgress({...defaults(), ...StudyProfile.snapshot(row.snapshot), level: row.level})
+    )}),
+    applyLocal: (payload, previous) => applyStudyProfile(payload, previous, false),
+    archive: archiveProfile,
+    onState: setSyncState
+  });
+  void progressSync.check();
+}
+
+function updateAccountProfile() {
+  if (!ui.cloudUser && !ui.cachedAccount) return;
+  const value = $('accountLevel')?.value;
+  if (!StudyProfile.levels.includes(value)) return;
+  try {
+    setProfileName($('accountNickname')?.value);
+    progress.level = value;
+    ui.reviewQueue = null;
+    if (!save()) throw Error('No se pudo guardar.');
+    ui.cloudNotice = 'Perfil actualizado en este navegador.';
+    render();
+  } catch {
+    toast('No se pudo guardar el perfil en este navegador.');
+  }
 }
 
 function undoCloudRestore() {
-  if (!ui.cloudUser || ui.cloudBusy) return;
+  if (!ui.cloudUser && !ui.cachedAccount) return;
   try {
-    const previous = StudyProfile.snapshot(JSON.parse(localStorage.getItem(recoveryKey()) || 'null'));
-    if (previous?.version !== 1 || !confirm('¿Recuperar el progreso anterior de este navegador?')) return;
-    replaceStudyProgress(previous);
+    const record = JSON.parse(readBrowserValue(recoveryKey()) || 'null');
+    const previous = StudyProfile.snapshot(record?.snapshot || record);
+    if (previous?.version !== 1 || !confirm('¿Recuperar el respaldo anterior? La siguiente sincronización usará estos cambios.')) return;
+    applyStudyProfile({nickname: record.nickname || ui.syncName, snapshot: previous}, currentProfile(), true);
     ui.cloudNotice = 'Progreso anterior recuperado en este navegador.';
     render();
   } catch {
@@ -480,20 +639,43 @@ function undoCloudRestore() {
   }
 }
 
-function copyGuestProgress() {
-  if (!ui.cloudUser || ui.cloudBusy) return;
+function copyGuestProgress(combine) {
+  if ((!ui.cloudUser && !ui.cachedAccount) || ui.cloudBusy) return;
   try {
-    const previous = StudyProfile.snapshot(JSON.parse(localStorage.getItem(KEY) || 'null'));
-    if (previous?.version !== 1) {
+    const guest = StudyProfile.snapshot(JSON.parse(readBrowserValue(KEY) || 'null'));
+    if (guest?.version !== 1) {
       toast('Este navegador todavía no tiene progreso sin cuenta.');
       return;
     }
-    if (!confirm('¿Copiar el progreso sin cuenta al espacio de esta cuenta? Se guardará un respaldo del progreso de la cuenta en este navegador.')) return;
-    replaceStudyProgress(previous);
-    ui.cloudNotice = 'Se copió el progreso de estudio. Los borradores del espacio sin cuenta siguen allí.';
+    const prompt = combine ? '¿Combinar ambos historiales? Las actividades coincidentes conservan el mayor avance registrado.' :
+      '¿Reemplazar el historial de estudio de la cuenta con el progreso sin cuenta?';
+    if (!confirm(prompt + ' Tus borradores permanecen en su espacio original y se guardará un respaldo local.')) return;
+    const current = currentProfile();
+    const snapshot = combine ? StudyProfile.combine(current.snapshot, guest) :
+      StudyProfile.snapshot(normalizeProgress({...defaults(), ...guest}));
+    applyStudyProfile({nickname: current.nickname, snapshot}, current, true);
+    ui.cloudNotice = 'Se importó el progreso de estudio sin cuenta.';
     render();
   } catch {
-    toast('No se pudo copiar el avance sin cuenta.');
+    toast('No se pudo importar el avance sin cuenta.');
+  }
+}
+
+async function requestAccountDeletion(requested) {
+  if (!ui.cloudUser || !syncSession || ui.cloudBusy) return;
+  const message = requested ? '¿Solicitar la eliminación de tu cuenta y sus datos en la nube? El responsable verificará la solicitud.' :
+    '¿Cancelar la solicitud de eliminación?';
+  if (!confirm(message)) return;
+  ui.cloudBusy = true;
+  render();
+  try {
+    ui.deletionRequested = await syncSession.requestDeletion(requested);
+    ui.cloudNotice = requested ? 'Solicitud registrada. Puedes cancelarla mientras esté pendiente.' : 'Solicitud de eliminación cancelada.';
+  } catch {
+    ui.cloudNotice = 'No se pudo actualizar la solicitud.';
+  } finally {
+    ui.cloudBusy = false;
+    if (ui.page === 'account') render();
   }
 }
 
@@ -513,10 +695,10 @@ async function changeAnalyticsConsent(enabled) {
   }
 }
 
-async function cloudLogin(register) {
+async function cloudLogin(register, emailHint) {
   const cloud = window.XannyCloud;
   if (!cloud?.available() || ui.cloudBusy) return;
-  const email = ($('accountEmail')?.value || '').trim();
+  const email = (emailHint || $('accountEmail')?.value || '').trim();
   if (!/^\S+@\S+\.\S+$/.test(email)) {
     toast('Escribe un correo válido.');
     return;
@@ -539,58 +721,30 @@ async function cloudLogin(register) {
   }
 }
 
-async function cloudSave() {
-  if (!ui.cloudUser || ui.cloudBusy) return;
-  const nickname = ($('accountNickname')?.value || '').trim().slice(0, 60) || 'Estudiante';
-  const snapshot = StudyProfile.snapshot(progress);
-  ui.cloudBusy = true;
-  render();
-  try {
-    const remote = await XannyCloud.readProfile();
-    if (remote && !confirm('¿Reemplazar la copia en la nube con el progreso de este navegador?')) return;
-    ui.cloudProfile = await XannyCloud.saveProfile({nickname, level: snapshot.level, snapshot}, remote?.updated_at ?? null);
-    ui.cloudNotice = 'Copia en la nube guardada. Tus borradores siguen en este dispositivo.';
-  } catch {
-    ui.cloudNotice = 'No se pudo guardar. Si la copia cambió en otro dispositivo, vuelve a consultarla y confirma el cambio.';
-  } finally {
-    ui.cloudBusy = false;
-    if (ui.page === 'account') render();
-  }
+function cloudRestore() {
+  if (!progressSync || ui.syncState.kind === 'syncing') return;
+  if (confirm('¿Usar la copia en la nube en este navegador? Conservaremos un respaldo del historial local.')) void progressSync.restore();
 }
-
-async function cloudRestore() {
-  if (!ui.cloudUser || ui.cloudBusy) return;
-  ui.cloudBusy = true;
-  render();
-  try {
-    const remote = await XannyCloud.readProfile();
-    const snapshot = StudyProfile.snapshot(remote?.snapshot);
-    if (snapshot?.version !== 1 || !snapshot.completed) {
-      ui.cloudNotice = 'La cuenta todavía no tiene una copia compatible.';
-      return;
-    }
-    if (!confirm('¿Quieres reemplazar el progreso de estudio de este navegador con la copia de la nube? Tus borradores seguirán aquí.')) return;
-    replaceStudyProgress(snapshot);
-    ui.cloudProfile = remote;
-    ui.cloudNotice = 'Copia restaurada. Tus borradores siguen en este dispositivo.';
-  } catch {
-    ui.cloudNotice = 'No se pudo restaurar la copia en este momento.';
-  } finally {
-    ui.cloudBusy = false;
-    if (ui.page === 'account') render();
-  }
+function keepLocalCopy() {
+  if (!progressSync || !ui.syncState.conflict || ui.syncState.kind === 'syncing') return;
+  if (confirm('¿Guardar el progreso de este navegador en la nube? Conservaremos un respaldo de la otra copia.')) void progressSync.keep();
 }
-
-async function cloudLogout() {
+async function cloudLogout(clearDevice = false) {
   if (!ui.cloudUser || ui.cloudBusy) return;
+  if (clearDevice && !confirm('¿Cerrar sesión y borrar las copias locales de esta cuenta? Exporta antes cualquier cambio pendiente que quieras conservar.')) return;
+  const oldScope = progressKey;
   ui.cloudBusy = true;
   render();
   try {
     await XannyCloud.logout();
     ui.cloudUser = null;
+    ui.cachedAccount = false;
+    rememberActiveAccount(null);
     switchWorkspace(null);
+    if (clearDevice) {
+      for (const suffix of ['', ':alias', ':sync', ':recovery', ':other-tab']) localStorage.removeItem(oldScope + suffix);
+    }
     ui.analyticsConsent = false;
-    ui.cloudProfile = null;
     ui.teacherStats = null;
     ui.teacherRoster = null;
     ui.cloudNotice = 'Sesión cerrada. El progreso sin cuenta sigue disponible en este navegador.';
@@ -603,24 +757,23 @@ async function cloudLogout() {
 }
 async function cloudTeacher(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherStats=await XannyCloud.teacherSummary();ui.cloudNotice='Estadísticas del proyecto consultadas con permisos de administrador.'}catch(e){ui.teacherStats=null;ui.cloudNotice='Panel no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
 async function cloudRoster(){if(!ui.cloudUser){toast('Necesitas iniciar sesión.');return}ui.cloudBusy=true;render();try{ui.teacherRoster=await XannyCloud.teacherRoster();ui.cloudNotice='Listado de alumnos guardado y consultado con permisos de administrador.'}catch(e){ui.teacherRoster=null;ui.cloudNotice='Listado no disponible: '+e.message}finally{ui.cloudBusy=false;render()}}
+
 function account() {
   const cloud = window.XannyCloud;
   const configured = Boolean(cloud?.available());
   const user = ui.cloudUser;
+  const localAccount = user || ui.cachedAccount;
   const ss = ui.teacherStats;
   const analytics = Boolean(cloud?.studyAnalyticsAvailable());
   const disabled = !configured || ui.cloudBusy ? 'disabled' : '';
   const admin = ui.classroomData?.role === 'admin';
-  const cloudDate = ui.cloudProfile?.updated_at ? new Date(ui.cloudProfile.updated_at) : null;
-  const lastCopy = cloudDate && Number.isFinite(cloudDate.getTime())
-    ? 'Última copia guardada: ' + cloudDate.toLocaleString('es')
-    : 'Aún no hay una copia en la nube confirmada.';
-  const login = configured ? `<label class="label-input" for="accountEmail">Correo electrónico</label><input id="accountEmail" class="account-input" type="email" autocomplete="email" placeholder="nombre@correo.com" ${disabled}><div class="button-group mt"><button class="button primary" data-a="cloudLogin" ${disabled}>Iniciar sesión</button><button class="button ghost" data-a="cloudRegister" ${disabled}>Crear cuenta</button></div><label class="consent-row mt"><input type="checkbox" id="accountConsent"><span>Para crear una cuenta, acepto el uso de mi correo y del progreso que decida respaldar. <a href="${esc(cloud.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">Política de privacidad</a></span></label><label class="consent-row"><input type="checkbox" id="accountAdult"><span>Declaro que soy mayor de 18 años.</span></label>`
+  const login = configured ? `<label class="label-input" for="accountEmail">Correo electrónico</label><input id="accountEmail" class="account-input" type="email" autocomplete="email" placeholder="nombre@correo.com" ${disabled}><div class="button-group mt"><button class="button primary" data-a="cloudLogin" ${disabled}>Iniciar sesión</button><button class="button ghost" data-a="cloudRegister" ${disabled}>Crear cuenta</button></div><label class="consent-row mt"><input type="checkbox" id="accountConsent"><span>Para crear una cuenta, acepto el uso de mi correo y el guardado automático del progreso. <a href="${esc(cloud.privacyPolicyUrl)}" target="_blank" rel="noopener noreferrer">Política de privacidad</a></span></label><label class="consent-row"><input type="checkbox" id="accountAdult"><span>Declaro que soy mayor de 18 años.</span></label><p class="subtle">Abre el enlace desde el navegador que lo solicitó.</p>`
     : '<p>Próximamente podrás acceder o crear una cuenta mediante un enlace enviado por correo. El servicio de cuentas todavía está desactivado.</p><div class="button-group"><button class="button primary" disabled>Iniciar sesión</button><button class="button ghost" disabled>Crear cuenta</button></div>';
-  const storage = user ? `<p>${esc(lastCopy)}</p><label class="label-input" for="accountNickname">Alias visible para el equipo docente</label><input id="accountNickname" class="account-input" maxlength="60" value="${esc(ui.cloudProfile?.nickname || 'Estudiante')}"><div class="button-group mt"><button class="button primary" data-a="cloudSave" ${disabled}>Guardar copia en la nube</button><button class="button ghost" data-a="cloudRestore" ${disabled}>Restaurar copia</button></div>`
-    : `<p>${configured ? 'Inicia sesión para guardar o restaurar una copia del progreso que tú elijas.' : 'La sincronización en la nube está desactivada.'}</p>`;
-  return heading('MI CUENTA', 'Tu cuenta y tus datos', 'Puedes estudiar sin registrarte. Cada cuenta tiene su propio espacio de progreso en este navegador.') +
-    `<div class="grid grid-2"><section class="card"><h2 class="section-h">Cuenta de estudiante</h2>${user ? `<p>Sesión de <strong>${esc(user.email || 'estudiante')}</strong></p><button class="button ghost" data-a="cloudLogout" ${disabled}>Cerrar sesión</button>` : login}${ui.cloudNotice ? `<div class="info-note mt" role="status">${esc(ui.cloudNotice)}</div>` : ''}</section><section class="card"><h2 class="section-h">Progreso local y copia en la nube</h2><h3>En este navegador</h3><p>${storageOK ? 'Tu avance se guarda automáticamente. Los borradores permanecen en este dispositivo.' : 'El navegador restringe el guardado automático. Puedes exportar tu avance en Ajustes.'}</p><button class="button ghost sm" data-a="nav" data-id="settings">Exportar o importar progreso</button>${user ? `<button class="button ghost sm mt" data-a="copyGuestProgress" ${disabled}>Copiar avance sin cuenta</button>${canRestorePrevious() ? `<button class="button ghost sm mt" data-a="undoCloudRestore" ${disabled}>Recuperar respaldo previo</button>` : ''}<p class="subtle">El historial local de la cuenta se conserva al cerrar sesión. Puedes volver a él al iniciar sesión con la misma cuenta.</p>` : ''}<div class="divider"></div><h3>En la nube</h3>${storage}</section></div><section class="card mt"><h2 class="section-h">Privacidad y actividad</h2><div class="activity-row"><span>Visitas anónimas agregadas</span><strong>${cloud?.visitorAnalyticsAvailable() ? 'Activadas' : 'Desactivadas'}</strong></div><div class="activity-row"><span>Analítica de estudio en la nube</span><strong>${analytics ? 'Disponible con tu autorización' : 'Desactivada'}</strong></div><label class="consent-row mt"><input id="studyAnalyticsConsent" type="checkbox" ${ui.analyticsConsent ? 'checked' : ''} ${(analytics || ui.analyticsConsent) && user && !ui.cloudBusy ? '' : 'disabled'}><span>Permitir el registro de mis inicios de sesión de estudio, misiones terminadas, tipos de error y resultados por habilidad. El registro usa identificadores de actividades y puntuaciones.</span></label>${admin ? `<div class="button-group mt"><button class="button ghost" data-a="cloudTeacher" ${disabled}>Resumen administrativo</button><button class="button ghost" data-a="cloudRoster" ${disabled}>Listado de alumnos</button></div>` : ''}</section>${Array.isArray(ui.teacherRoster)?`<section class="card mt"><h2 class="section-h">Alumnos con perfil guardado · hasta 200</h2><p class="subtle">Los alias y niveles son información voluntaria. No se muestran correos ni escritos.</p>${ui.teacherRoster.length?ui.teacherRoster.map(r=>`<div class="activity-row"><span><strong>${esc(r.alias)}</strong> · ${esc(r.level)}</span><span>${Number(r.activities)||0} eventos · ${r.lastActivity?esc(String(r.lastActivity).slice(0,10)):'Sin actividad'}</span></div>`).join(''):'<p>No hay perfiles guardados todavía.</p>'}</section>`:''}${ss?`<section class="card mt"><h2 class="section-h">Resumen del proyecto · acceso autorizado</h2><div class="stats"><div class="stat"><div class="value">${Number(ss.accounts)||0}</div><div class="label">Estudiantes registrados</div></div><div class="stat"><div class="value">${Number(ss.profiles)||0}</div><div class="label">Con respaldo de progreso</div></div><div class="stat"><div class="value">${Number(ss.active7d)||0}</div><div class="label">Estudiantes activos (7 días)*</div></div><div class="stat"><div class="value">${Number(ss.events7d)||0}</div><div class="label">Módulos registrados 7 días</div></div></div><p class="subtle">*Activos = usuarios con al menos un evento registrado (requiere que hayan autorizado el registro). No equivale a visitas.</p></section>`:''}<section class="card mt"><h2 class="section-h">Antes de abrir a alumnos reales</h2><p>Se requiere política de privacidad, autorización informada, revisión de seguridad y pruebas con varios usuarios. Si se aceptan menores, deben aplicarse garantías adicionales y autorización válida de sus representantes.</p></section>`;
+  const profile = localAccount ? `<p>${user ? 'Sesión de <strong>' + esc(user.email || 'estudiante') + '</strong>' : 'Espacio de cuenta guardado en este navegador.'}</p><div class="grid grid-2 account-fields"><div><label class="label-input" for="accountNickname">Nombre visible</label><input id="accountNickname" class="account-input" maxlength="60" value="${esc(ui.syncName)}"></div><div><label class="label-input" for="accountLevel">Nivel de inglés</label><select class="field" id="accountLevel">${StudyProfile.levels.map(level => `<option ${level === progress.level ? 'selected' : ''}>${level}</option>`).join('')}</select></div></div><div class="button-group mt"><button class="button primary" data-a="saveAccountProfile" ${disabled}>Guardar perfil</button><button class="button ghost" data-a="cloudLogout" ${user ? disabled : 'disabled'}>Cerrar sesión</button></div>` : login;
+  const storage = localAccount ? `<div class="account-sync-status"><strong id="accountSyncStatus" role="status" aria-live="polite"></strong><p id="accountSyncHelp"></p></div><div id="accountSyncConflict" class="info-note mt" hidden><strong>Hay dos versiones del progreso</strong><p id="accountConflictDate"></p><div class="button-group"><button class="button ghost" id="accountConflictKeep" data-a="keepLocalCopy">Usar esta copia</button><button class="button ghost" id="accountConflictRestore" data-a="cloudRestore">Usar la copia de la nube</button></div></div><div class="button-group mt"><button class="button ghost sm" data-a="cloudSave" ${user ? disabled : 'disabled'}>Sincronizar ahora</button><button class="button ghost sm" data-a="cloudRestore" ${user ? disabled : 'disabled'}>Restaurar copia</button><button class="button ghost sm" id="accountSyncLogin" data-a="renewCloudSession" hidden>Solicitar otro enlace</button></div><details class="account-history mt"><summary>Importar o recuperar historial</summary><p>Importa el progreso que hiciste en este navegador sin cuenta. Los borradores permanecen en el espacio donde se escribieron.</p><div class="button-group"><button class="button ghost sm" data-a="copyGuestProgress">Combinar progreso sin cuenta</button><button class="button ghost sm" data-a="replaceGuestProgress">Reemplazar con progreso sin cuenta</button><button class="button ghost sm" id="accountUndo" data-a="undoCloudRestore" hidden>Recuperar respaldo previo</button></div><button class="button ghost sm mt" id="accountOtherTab" data-a="exportOtherTab" hidden>Descargar historial de otra pestaña</button></details>`
+    : `<p>${configured ? 'Inicia sesión para recuperar tu avance y sincronizarlo entre dispositivos.' : 'La sincronización en la nube está desactivada.'}</p>`;
+  return heading('MI CUENTA', 'Tu cuenta y tus datos', 'Estudia sin cuenta o lleva tu progreso a tus dispositivos. Los borradores permanecen en este navegador.') +
+    `<div class="grid grid-2"><section class="card"><h2 class="section-h">Cuenta de estudiante</h2>${profile}${ui.cloudNotice ? `<div class="info-note mt" role="status">${esc(ui.cloudNotice)}</div>` : ''}</section><section class="card"><h2 class="section-h">Progreso y sincronización</h2>${storage}<div class="divider"></div><p>${storageOK ? 'Tu avance se guarda en este navegador.' : 'El navegador restringe el guardado local. Exporta tu avance antes de cerrar.'}</p><button class="button ghost sm" data-a="nav" data-id="settings">Exportar o importar un archivo</button></section></div><section class="card mt"><h2 class="section-h">Privacidad y actividad</h2><div class="activity-row"><span>Visitas anónimas agregadas</span><strong>${cloud?.visitorAnalyticsAvailable() ? 'Activadas' : 'Desactivadas'}</strong></div><div class="activity-row"><span>Analítica de estudio en la nube</span><strong>${analytics ? 'Disponible con tu autorización' : 'Desactivada'}</strong></div><label class="consent-row mt"><input id="studyAnalyticsConsent" type="checkbox" ${ui.analyticsConsent ? 'checked' : ''} ${(analytics || ui.analyticsConsent) && user && !ui.cloudBusy ? '' : 'disabled'}><span>Permitir el registro de inicios de práctica, actividades terminadas, tipos de error y resultados por habilidad.</span></label>${user ? `<details class="account-history mt"><summary>Eliminar cuenta y datos</summary><p>${ui.deletionRequested ? 'Tu solicitud está pendiente de revisión.' : 'Puedes solicitar la eliminación de la cuenta, el progreso remoto y los datos asociados.'} Puedes borrar por separado los datos de esta cuenta en este navegador.</p><button class="button ghost" data-a="${ui.deletionRequested ? 'cancelDeletion' : 'requestDeletion'}" ${disabled}>${ui.deletionRequested ? 'Cancelar solicitud' : 'Solicitar eliminación'}</button><button class="button ghost mt" data-a="clearAccountDevice" ${disabled}>Cerrar sesión y limpiar este navegador</button></details>` : ''}${admin ? `<div class="button-group mt"><button class="button ghost" data-a="cloudTeacher" ${disabled}>Resumen administrativo</button><button class="button ghost" data-a="cloudRoster" ${disabled}>Listado de alumnos</button></div>` : ''}</section>` + `${Array.isArray(ui.teacherRoster)?`<section class="card mt"><h2 class="section-h">Alumnos con perfil guardado · hasta 200</h2><p class="subtle">Los alias y niveles son información voluntaria. No se muestran correos ni escritos.</p>${ui.teacherRoster.length?ui.teacherRoster.map(r=>`<div class="activity-row"><span><strong>${esc(r.alias)}</strong> · ${esc(r.level)}</span><span>${Number(r.activities)||0} eventos · ${r.lastActivity?esc(String(r.lastActivity).slice(0,10)):'Sin actividad'}</span></div>`).join(''):'<p>No hay perfiles guardados todavía.</p>'}</section>`:''}${ss?`<section class="card mt"><h2 class="section-h">Resumen del proyecto · acceso autorizado</h2><div class="stats"><div class="stat"><div class="value">${Number(ss.accounts)||0}</div><div class="label">Estudiantes registrados</div></div><div class="stat"><div class="value">${Number(ss.profiles)||0}</div><div class="label">Con respaldo de progreso</div></div><div class="stat"><div class="value">${Number(ss.active7d)||0}</div><div class="label">Estudiantes activos (7 días)*</div></div><div class="stat"><div class="value">${Number(ss.events7d)||0}</div><div class="label">Módulos registrados 7 días</div></div></div><p class="subtle">*Activos = usuarios con al menos un evento registrado (requiere que hayan autorizado el registro). No equivale a visitas.</p></section>`:''}<section class="card mt"><h2 class="section-h">Antes de abrir a alumnos reales</h2><p>Se requiere política de privacidad, autorización informada, revisión de seguridad y pruebas con varios usuarios. Si se aceptan menores, deben aplicarse garantías adicionales y autorización válida de sus representantes.</p></section>`;
 }
 
 
@@ -740,12 +893,12 @@ async function sendClassResult() {
   }
 }
 
-function render(){if(!sections.some(s=>s[0]===ui.page)&&!['lesson','mission','diagnostic'].includes(ui.page))ui.page='home';const page={home,missions,mission,progress:learningProgress,account,classroom,path,listen,speak,cards,errors,grammar,lesson,write,resources,settings,diagnostic}[ui.page];shell(page());}
+function render(){if(!sections.some(s=>s[0]===ui.page)&&!['lesson','mission','diagnostic'].includes(ui.page))ui.page='home';const page={home,missions,mission,progress:learningProgress,account,classroom,path,listen,speak,cards,errors,grammar,lesson,write,resources,settings,diagnostic}[ui.page];shell(page());if(ui.page==='account')displaySyncStatus();}
 function speakText(text,rate){if(!('speechSynthesis'in window)){toast('Este navegador no ofrece voz sintética. Prueba con Chrome, Edge o Safari.');return}try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text).replace(/\b[A-Za-z]+:\s/g,''));u.lang=progress.accent||'en-US';u.rate=rate||Number(progress.rate||0.9);u.pitch=1;const voices=speechSynthesis.getVoices();const desired=voices.find(v=>v.lang===u.lang)||voices.find(v=>v.lang.startsWith('en'));if(desired)u.voice=desired;u.onerror=e=>{if(e.error!=='canceled'&&e.error!=='interrupted')toast('No se pudo reproducir el audio. Verifica las voces del dispositivo.')};speechSynthesis.speak(u)}catch(e){toast('Error de audio: comprueba las opciones de voz del navegador.')}}
 function compareSpeech(expected,actual){const a=normal(expected).split(' ').filter(Boolean),b=normal(actual).split(' ').filter(Boolean);const dp=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));for(let i=0;i<=a.length;i++)dp[i][0]=i;for(let j=0;j<=b.length;j++)dp[0][j]=j;for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));const score=Math.round(Math.max(0,1-dp[a.length][b.length]/Math.max(1,a.length,b.length))*100);const rest=[...b],missing=[];for(const w of a){let ix=rest.indexOf(w);if(ix===-1)missing.push(w);else rest.splice(ix,1)}return {score,missing:missing.slice(0,8),message:score>=90?'¡Muy buena coincidencia! Intenta decirlo otra vez sin leer.':score>=70?'Buena base. Repite fijándote en el ritmo y las palabras que faltaron.':'Escucha de nuevo y practica en fragmentos de 3 a 5 palabras.'}}
 function record(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast('Reconocimiento de voz no disponible aquí. Usa el cuadro de texto.');return}if(ui.speaking){try{ui.recognition?.stop()}catch(e){}ui.speaking=false;render();return}try{const r=new SR();ui.recognition=r;r.lang=progress.accent;r.interimResults=false;r.continuous=false;r.maxAlternatives=1;ui.speaking=true;r.onresult=e=>{const t=e.results[0][0].transcript;ui.speakText=t;ui.speakFeedback=null;ui.speaking=false;render();toast('Voz reconocida. Puedes comparar la frase.')};r.onerror=e=>{ui.speaking=false;render();const dict={not:'', 'not-allowed':'Permiso de micrófono denegado. Revisa los permisos del navegador.',network:'El servicio de voz no está disponible. Usa el modo escrito.', 'no-speech':'No se detectó voz. Prueba otra vez.'};toast(dict[e.error]||`No fue posible reconocer la voz (${e.error}).`)};r.onend=()=>{if(ui.speaking){ui.speaking=false;render()}};r.start();render()}catch(e){ui.speaking=false;toast('No se pudo iniciar el micrófono. Usa HTTPS o localhost y revisa permisos.');render()}}
-function downloadData(){try{const blob=new Blob([JSON.stringify({...progress,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`Aprende-con-Xanny-progreso-${day()}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del progreso exportada.')}catch(e){toast('No fue posible exportar el archivo.')}}
-function importData(file){if(!file)return;if(file.size>2_000_000){toast('La copia es demasiado grande (máximo 2 MB).');return}const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(p.version!==1||!StudyProfile.levels.includes(p.level)||typeof p.xp!=='number'||typeof p.completed!=='object'||!p.completed)throw Error('invalid');progress=normalizeProgress(p);save();ui.reviewQueue=null;toast('Progreso importado correctamente.');navPage('home')}catch(e){toast('Archivo no válido: importa una copia JSON de tu progreso.')}};rd.readAsText(file)}
+function downloadData(other){try{const source=typeof other==='string'?JSON.parse(other):progress;const blob=new Blob([JSON.stringify({...source,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`Aprende-con-Xanny-progreso-${day()}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del progreso exportada.')}catch(e){toast('No fue posible exportar el archivo.')}}
+function importData(file){if(!file)return;if(file.size>2_000_000){toast('La copia es demasiado grande (máximo 2 MB).');return}const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(p.version!==1||!StudyProfile.levels.includes(p.level)||typeof p.xp!=='number'||typeof p.completed!=='object'||!p.completed)throw Error('invalid');if(progressKey!==KEY){if(!confirm('¿Reemplazar el progreso de esta cuenta con el archivo? Se guardará un respaldo local.'))return;archiveProfile(currentProfile());}progress=normalizeProgress(p);save();ui.reviewQueue=null;toast('Progreso importado correctamente.');navPage('home')}catch(e){toast('Archivo no válido: importa una copia JSON de tu progreso.')}};rd.readAsText(file)}
 function doReview(rating){const id=ui.reviewQueue?.shift(),v=DATA.vocabulary.find(x=>x.id===id);if(!v)return;const prev=progress.srs[id]||{interval:0,ease:2.4,reps:0};let iv=prev.interval,reps=prev.reps,ease=prev.ease;if(rating==='again'){iv=0;reps=0;ease=Math.max(1.3,ease-.18)}else if(rating==='hard'){iv=1;reps++;ease=Math.max(1.3,ease-.1)}else if(rating==='good'){iv=prev.interval===0?1:Math.max(2,Math.round(prev.interval*ease));reps++}else{iv=prev.interval===0?4:Math.max(4,Math.round(prev.interval*(ease+.4)));reps++;ease+=.1}progress.srs[id]={interval:iv,reps,ease,due:plusDays(iv),last:day()};if(rating!=='again'){ui.reviewSuccess++;awardOnce('reviewRewarded',`${day()}:${id}`,5)}else{activity(0)}ui.reviewCount++;ui.cardFlipped=false;save();render()}
 function checkWriting(){const item=getWriting();const s=$('writingText')?.value||'';progress.drafts[item.id]=s;const f=writingFeedback(s,item);ui.writeFeedback=f;if(f.passes){awardOnce('writingDone',item.id,20);toast('Alcanzaste la extensión orientativa. Guardamos tu actividad de escritura.')}else save();render()}
 function clickAction(e){const el=e.target.closest('[data-a]');if(!el)return;const action=el.dataset.a,id=el.dataset.id,ix=Number(el.dataset.index);switch(action){
@@ -761,11 +914,19 @@ case 'missionFinish':finishMission();break;
 case 'cloudLogin':cloudLogin(false);break;
 case 'cloudRegister':cloudLogin(true);break;
 case 'cloudRefresh':refreshCloudUser();break;
-case 'cloudSave':cloudSave();break;
-case 'copyGuestProgress':copyGuestProgress();break;
+case 'cloudSave':if(!ui.cloudBusy)void progressSync?.check();break;
+case 'saveAccountProfile':updateAccountProfile();break;
+case 'copyGuestProgress':copyGuestProgress(true);break;
+case 'replaceGuestProgress':copyGuestProgress(false);break;
+case 'keepLocalCopy':keepLocalCopy();break;
+case 'renewCloudSession':if(ui.cloudUser?.email)cloudLogin(false,ui.cloudUser.email);break;
+case 'requestDeletion':requestAccountDeletion(true);break;
+case 'cancelDeletion':requestAccountDeletion(false);break;
+case 'exportOtherTab':downloadData(readBrowserValue(progressKey + ':other-tab'));break;
 case 'undoCloudRestore':undoCloudRestore();break;
 case 'cloudRestore':cloudRestore();break;
 case 'cloudLogout':cloudLogout();break;
+case 'clearAccountDevice':cloudLogout(true);break;
 case 'cloudTeacher':cloudTeacher();break;
 case 'cloudRoster':cloudRoster();break;
 case 'classCreate':{const name=$('className')?.value.trim();if(name)classroomAction(()=>XannyCloud.createGroup(name),'Grupo creado.');else toast('Escribe un nombre de grupo.');break}
@@ -806,10 +967,10 @@ case 'diagnosticNext':{const d=ui.diagnostic;if(!d||d.selected===null)return;d.a
 case 'adoptLevel':if(!['A1','A2','B1','B2'].includes(id))return;progress.level=id;save();ui.reviewQueue=null;navPage('path');toast(`Ruta ajustada a ${id}`);break;
 case 'exportData':downloadData();break;
 case 'importTrigger':$('importFile')?.click();break;
-case 'resetData':{if(!ui.resetArmed){ui.resetArmed=true;toast('Pulsa otra vez para borrar definitivamente.');render()}else{localStorage.removeItem(progressKey);localStorage.removeItem(progressKey + ':recovery');progress=defaults();ui.reviewQueue=null;ui.resetArmed=false;navPage('home');toast('Progreso reiniciado en este dispositivo.')}break}
+case 'resetData':{if(!ui.resetArmed){ui.resetArmed=true;toast('Pulsa otra vez para borrar definitivamente.');render()}else{if(progressKey!==KEY){if(!confirm('¿Reiniciar este historial, incluida su próxima copia en la nube? Se guardará un respaldo local.'))return;try{archiveProfile(currentProfile());}catch{toast('No se pudo crear el respaldo local.');return;}progress=defaults();save();}else{localStorage.removeItem(progressKey);localStorage.removeItem(recoveryKey());lastLocalRecord=null;progress=defaults();}ui.reviewQueue=null;ui.resetArmed=false;navPage('home');toast('Progreso reiniciado en este dispositivo.')}break}
 default:break}}
 document.addEventListener('click',clickAction);
-document.addEventListener('input',e=>{if(e.target.id==='speakText')ui.speakText=e.target.value;if(e.target.id==='missionWrite'&&ui.mission){ui.mission.transferText=e.target.value;progress.missionDrafts[ui.mission.id]=e.target.value.slice(0,5000);save();e.target.removeAttribute?.('aria-invalid');const status=$('missionWriteStatus');if(status)status.textContent='';}if(e.target.id==='writingText'){const count=words(e.target.value).length;const n=$('wordCount');if(n)n.textContent=`${count} palabras · mínimo orientativo ${getWriting().min}`;}if(e.target.id==='pathSearch')ui.pathSearch=e.target.value});
+document.addEventListener('input',e=>{if(['accountNickname','accountLevel'].includes(e.target.id))e.target.dataset.touched='true';if(e.target.id==='speakText')ui.speakText=e.target.value;if(e.target.id==='missionWrite'&&ui.mission){ui.mission.transferText=e.target.value;progress.missionDrafts[ui.mission.id]=e.target.value.slice(0,5000);save();e.target.removeAttribute?.('aria-invalid');const status=$('missionWriteStatus');if(status)status.textContent='';}if(e.target.id==='writingText'){const count=words(e.target.value).length;const n=$('wordCount');if(n)n.textContent=`${count} palabras · mínimo orientativo ${getWriting().min}`;}if(e.target.id==='pathSearch')ui.pathSearch=e.target.value});
 document.addEventListener('keydown', e => {
   if (e.target.id === 'pathSearch' && e.key === 'Enter') {
     e.preventDefault();
@@ -843,6 +1004,22 @@ default:break}});
 window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==ui.page){ui.page=h;ui.lesson=null;render();if(h==='account'||h==='classroom')refreshCloudUser()}});
 if('serviceWorker'in navigator&&location.protocol!=='file:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 render();
-if(window.XannyCloud?.available())refreshCloudUser();
-else window.XannyCloud?.startAnonymousVisits();
+window.addEventListener('offline', () => progressSync?.offline());
+window.addEventListener('online', () => {
+  if (window.XannyCloud?.available() && !ui.cloudUser) void refreshCloudUser();
+  else void progressSync?.check();
+});
+window.addEventListener('focus', () => progressSync?.focus());
+window.addEventListener('storage', event => {
+  if (event.key === progressKey && event.newValue !== lastLocalRecord) {
+    progress = load();
+    ui.reviewQueue = null;
+    progressSync?.queue();
+    if (ui.page === 'progress' || ui.page === 'home') render();
+  }
+});
+if(window.XannyCloud?.available()){
+  if(navigator.onLine===false){loadCachedAccount();render();}
+  else void refreshCloudUser();
+}else window.XannyCloud?.startAnonymousVisits();
 })();

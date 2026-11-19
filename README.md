@@ -1,4 +1,4 @@
-# Aprende con Xanny 3.3 — Aula virtual
+# Aprende con Xanny — Cuentas y sincronización
 
 Laboratorio de inglés con lecciones, escucha, voz, tarjetas y 16 misiones.
 Cada misión tiene dos variantes y una decisión de transferencia. En práctica libre
@@ -19,19 +19,27 @@ configuración publicada. La versión de GitHub Pages sigue en `main`.
 - El acceso usa enlaces de Supabase Auth con PKCE. Abre el enlace en el mismo
   navegador que lo solicitó. La sesión se recupera al recargar y se puede cerrar
   en cada dispositivo. Para volver a entrar, solicita otro enlace.
-- La copia se crea manualmente. Guardar sobre una copia existente y restaurar
-  requieren confirmación. Si otro dispositivo guarda entre la lectura y el
-  intento de escritura, el servidor rechaza el cambio. Antes de restaurar se
-  guarda un respaldo local recuperable. El progreso, temas e historial
-  permitidos se copian sin borradores ni preferencias de consentimiento.
+- El progreso se guarda primero en el navegador y se sincroniza automáticamente
+  al iniciar sesión, recuperar la conexión o terminar un lote de cambios.
+  Cambios rápidos se agrupan durante unos segundos. Al abrir otra sesión se
+  recupera la última copia si ese navegador no tiene cambios pendientes.
+- La sincronización compara la revisión de la copia. Si dos dispositivos
+  guardaron historiales distintos, pide elegir cuál usar y conserva un respaldo
+  local de la alternativa. El guardado en la nube excluye borradores, respuestas
+  escritas y preferencias de consentimiento. Las copias locales se conservan al
+  cerrar sesión, salvo que elijas limpiarlas desde Mi cuenta.
+- Mi cuenta permite editar el nombre visible y el nivel. El progreso sin
+  cuenta puede reemplazar o combinarse con el de la cuenta, previa confirmación.
+  La combinación une actividades distintas y conserva el mayor avance de los
+  registros coincididos para evitar sumar dos veces el mismo historial.
 
 ## Preparar un entorno de desarrollo
 
 1. Usa un proyecto separado o Supabase CLI con Docker. En una base nueva aplica
-   `supabase_setup.sql` y luego `supabase_aula_33.sql`. Si el esquema 3.2 ya
-   existe, aplica solo la segunda migración. `xanny-dev` ya tiene aplicada
-   `xanny_aula_virtual_33` en el historial de migraciones. Haz un respaldo antes de migrar un
-   proyecto con datos. Ambos archivos están diseñados para ejecutarse una vez.
+   `supabase_setup.sql`, `supabase_aula_33.sql` y `supabase_progress_sync.sql`
+   en ese orden. Si el Aula 3.3 ya está instalada, aplica solo la última.
+   Usa un respaldo antes de migrar una base con datos. Cada migración se
+   ejecuta una vez.
 2. Configura los enlaces por correo y autoriza la URL exacta de la app de
    desarrollo con `?auth=1`. Para el entorno local de CI la app usa
    `http://127.0.0.1:4173`. El acceso de un despliegue web requiere HTTPS y
@@ -72,9 +80,28 @@ voluntariamente con su grupo constituyen un flujo independiente. Consulta
 
 - `node --test tests/fluentlab.test.cjs` comprueba lógica, compatibilidad y
   configuración desactivada.
-- `tests/browser.cjs` recorre escritorio, móvil y PWA. `tests/aula.sql` usa
-  PostgreSQL para comprobar roles, RLS y concurrencia de copias.
+- `tests/browser.cjs` recorre escritorio, móvil y PWA. `tests/sync-schema.sql` usa
+  PostgreSQL para comprobar roles, RLS, revisiones y solicitudes de eliminación.
+  `node --test tests/progress-sync.test.cjs` prueba el agrupamiento y la
+  recuperación ante falta de conexión, sesión vencida y fallos del servidor.
 - GitHub Actions prepara un Supabase propio del runner con Auth, PostgREST y
   Mailpit. `tests/auth.cjs` comprueba registro por enlace, sesión, dos
-  navegadores y un flujo real de clase. Esta prueba no usa un proyecto de
-  producción ni entrega correo a destinatarios externos.
+  navegadores, edición de perfil, conflicto entre dispositivos, reintentos y un
+  flujo completo de clase. Se ejecuta con correo de prueba capturado en Mailpit.
+
+## Antes de activar el registro público
+
+- Prueba el flujo de correo con el SMTP y las URL HTTPS y de redirección del
+  entorno que se vaya a usar. Conserva `accountsEnabled: false` en GitHub
+  Pages hasta comprobarlo con dos buzones autorizados. Configura en el cliente
+  únicamente una clave publicable.
+- Completa el aviso de privacidad del entorno y define quién atiende las
+  solicitudes de eliminación. El alumno puede pedir la baja, cancelarla
+  mientras esté pendiente y limpiar su navegador por separado.
+- Revisa las solicitudes en `account_deletion_requests` desde administración.
+  Verifica la identidad y la solicitud vigente, gestiona cualquier clase del
+  titular y elimina la cuenta mediante Supabase Auth desde un servicio
+  administrativo o el panel. Las referencias de usuario usan borrado en
+  cascada. Si hay respaldos o datos en proveedores externos, aplica la política
+  de conservación declarada. Verifica la eliminación y registra su atención
+  según el procedimiento del responsable.

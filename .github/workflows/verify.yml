@@ -2,7 +2,7 @@ name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/xanny-3.3-aula]
+    branches: [main, development/xanny-cuentas-sync]
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Pruebas de lógica y compatibilidad
-        run: node --test tests/fluentlab.test.cjs
+        run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs
       - name: Preparar Playwright para Chrome del runner
         run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
       - name: Probar escritorio, móvil y Service Worker
@@ -29,10 +29,11 @@ jobs:
           sudo -u postgres createdb xanny_verify
           fixtures=$(mktemp -d)
           chmod 755 "$fixtures"
-          install -m 644 supabase_setup.sql supabase_aula_33.sql "$fixtures/"
+          install -m 644 supabase_setup.sql supabase_aula_33.sql supabase_progress_sync.sql "$fixtures/"
           install -D -m 644 tests/schema.sql "$fixtures/tests/schema.sql"
           install -m 644 tests/aula.sql "$fixtures/tests/aula.sql"
-          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/aula.sql"
+          install -m 644 tests/sync-schema.sql "$fixtures/tests/sync-schema.sql"
+          sudo -u postgres psql -X -d xanny_verify -f "$fixtures/tests/sync-schema.sql"
   pages:
     if: github.ref == 'refs/heads/main'
     needs: verify
@@ -45,10 +46,10 @@ jobs:
           base=https://xalex-xan.github.io/-fluentlab
           for attempt in {1..18}; do
             if html=$(curl --fail --silent --show-error --max-time 5 "$base/?release=${GITHUB_SHA}&attempt=$attempt") &&
-              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.3.0"* ]]; then
-              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.3.0")
+              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.3.1"* ]]; then
+              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.3.1")
               printf '%s' "$manifest" | node -e "const m = JSON.parse(require('node:fs').readFileSync(0)); if(m.name !== 'Aprende con Xanny' || m.icons.length !== 2) process.exit(1);"
-              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.3.0" > /dev/null
+              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.3.1" > /dev/null
               printf 'Marca, manifest y mascota verificados en GitHub Pages.\n'
               exit 0
             fi
@@ -57,7 +58,7 @@ jobs:
           exit 1
 
   auth:
-    if: github.ref == 'refs/heads/development/xanny-3.3-aula'
+    if: github.ref == 'refs/heads/development/xanny-cuentas-sync'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -92,6 +93,7 @@ jobs:
           mkdir -p supabase/migrations
           cp supabase_setup.sql supabase/migrations/20261117000000_base.sql
           cp supabase_aula_33.sql supabase/migrations/20261118000000_aula.sql
+          cp supabase_progress_sync.sql supabase/migrations/20261119000000_sync.sql
           if ! npx --yes supabase@2.75.0 start > "$RUNNER_TEMP/xanny-supabase.log" 2>&1; then
             sed -n -E '/(failed|Error|ERROR|denied|rate limit)/p' "$RUNNER_TEMP/xanny-supabase.log" | tail -15
             exit 1

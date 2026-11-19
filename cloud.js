@@ -92,20 +92,54 @@
     return data;
   }
 
-  async function saveProfile(profile, expected) {
-    const snapshot = StudyProfile.snapshot(profile.snapshot);
-    if (!snapshot || snapshot.version !== 1) throw Error('Formato de progreso incompatible.');
-    return rpc('xanny_save_progress', {
-      p_alias: profile.nickname, p_level: profile.level, p_snapshot: snapshot, p_expected: expected
-    });
+
+  async function accountSession(account) {
+    const db = await connect();
+    const {data, error} = await db.auth.getSession();
+    if (error) throw error;
+    if (data.session?.user.id !== account) {
+      throw Object.assign(Error('Vuelve a iniciar sesión.'), {code: 'AUTH_REQUIRED'});
+    }
+    // La sesión local selecciona el espacio. PostgreSQL autoriza cada petición mediante el JWT.
+    return db;
   }
 
-  async function readProfile() {
-    const {db, user} = await authenticated();
-    const {data, error} = await db.from('learning_profiles')
-      .select('nickname,level,snapshot,updated_at').eq('id', user.id).maybeSingle();
-    if (error) throw error;
-    return data;
+  function bindProgress(account) {
+    return {
+      async read() {
+        const db = await accountSession(account);
+        const {data, error} = await db.from('learning_profiles')
+          .select('nickname,level,snapshot,updated_at,revision').eq('id', account).maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      async write(profile, revision) {
+        const db = await accountSession(account);
+        const snapshot = StudyProfile.snapshot(profile.snapshot);
+        if (snapshot?.version !== 1) throw Error('Formato de progreso incompatible.');
+        const {data, error} = await db.rpc('xanny_sync_progress', {
+          p_account: account, p_alias: profile.nickname, p_level: snapshot.level,
+          p_snapshot: snapshot, p_revision: revision
+        });
+        if (error) throw error;
+        return data;
+      },
+      async readDeletion() {
+        const db = await accountSession(account);
+        const {data, error} = await db.from('account_deletion_requests')
+          .select('requested_at').eq('user_id', account).maybeSingle();
+        if (error) throw error;
+        return Boolean(data);
+      },
+      async requestDeletion(requested) {
+        const db = await accountSession(account);
+        const {data, error} = await db.rpc('xanny_account_deletion_request', {
+          p_account: account, p_requested: requested
+        });
+        if (error) throw error;
+        return data;
+      }
+    };
   }
 
   async function track(kind, moduleId, score) {
@@ -158,7 +192,7 @@
 
   window.XannyCloud = {
     available, classroomAvailable, studyAnalyticsAvailable, visitorAnalyticsAvailable,
-    privacyPolicyUrl: policy?.href, currentUser, sendLogin, logout, saveProfile, readProfile,
+    privacyPolicyUrl: policy?.href, currentUser, sendLogin, logout, bindProgress,
     track, teacherSummary, teacherRoster, readConsent, setConsent, startAnonymousVisits,
     classroomContext: () => rpc('xanny_classroom_context'),
     createGroup: name => rpc('xanny_create_group', {p_name: name}),

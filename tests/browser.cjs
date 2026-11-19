@@ -158,7 +158,7 @@ async function run() {
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
-    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.3.0')));
+    assert.ok(await page.evaluate(async () => (await caches.keys()).includes('xanny-english-static-3.3.1')));
     await desktop.setOffline(true);
     await page.reload();
     await page.locator('.page h1').waitFor();

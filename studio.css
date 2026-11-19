@@ -119,3 +119,14 @@ body.light {
   .xanny-hero {display: grid; align-self: start; margin-top: 3px;}
   .breadcrumb-brand + span {white-space: pre;}
 }
+
+/* Cuenta y conservación del progreso */
+.account-fields {align-items: end; gap: 12px;}
+.account-fields input, .account-fields select {width: 100%;}
+.account-sync-status {padding: 14px; border-radius: 12px; background: var(--surface2);}
+.account-sync-status p {margin: 5px 0 0; color: var(--muted);}
+#accountSyncStatus[data-state="saved"] {color: var(--ink);}
+#accountSyncStatus[data-state="pending"], #accountSyncStatus[data-state="syncing"] {color: var(--xanny-violet);}
+.account-history {padding: 12px 0; border-top: 1px solid var(--line);}
+.account-history summary {cursor: pointer; font-weight: 650;}
+.account-history p {margin: 9px 0;}

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const files = Object.fromEntries([
   'index.html', 'manifest.webmanifest', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'cloud-config.js', 'cloud.js', 'app.js', 'sw.js'
 ].map(path => [path, readFileSync(join(__dirname, '..', path), 'utf8')]));
 const exists = path => existsSync(join(__dirname, '..', path));
 
@@ -22,7 +22,7 @@ function createTest(files, oldProgress) {
   };
   const window={scrollTo(){},addEventListener:(type,fn)=>windowEvents[type]=fn};
   const run=Function('window','document','location','navigator','localStorage','setTimeout','URLSearchParams',
-    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,XANNY_EXTRA,XANNY_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
+    files["data.js"]+'\n'+files["question-bank.js"]+'\n'+files["mission-transfer.js"]+'\n'+files["missions-data.js"]+'\n'+files["adaptive.js"]+'\n'+files["study-profile.js"]+'\n'+files["progress-sync.js"]+'\n'+files["cloud-config.js"]+'\n'+files["cloud.js"]+'\nconst XannyCloud=window.XannyCloud;\n'+files["app.js"]+'\nreturn {DATA,MISSIONS,XANNY_EXTRA,XANNY_LISTEN_EXTRA,AdaptiveLearning,StudyProfile,cloud:window.XannyCloud};');
   const data=run(window,document,location,{},localStorage,()=>{},class {has(){return false}});
   return {...data,app,click:(a,d={})=>events.click.forEach(fn=>fn({target:{closest:()=>({dataset:{a,...d}})}})),
     input:(id,value)=>events.input.forEach(fn=>fn({target:{id,value}})),navigate:(hash)=>{location.hash='#'+hash;windowEvents.hashchange();},
@@ -266,4 +266,21 @@ test('el aula requiere configuración independiente y estudiar sin cuenta sigue 
   assert.match(app.app.innerHTML, /El aula virtual está desactivada/);
   app.click('nav', {id: 'missions'});
   assert.match(app.app.innerHTML, /16 MISIONES/);
+});
+
+test('los datos de sincronización filtran respuestas privadas incluso en registros antiguos', () => {
+  const {StudyProfile} = createTest(files);
+  const copy = StudyProfile.snapshot({version:1, level:'C1', xp:10,
+    drafts:{sample:'privado'}, missionDrafts:{sample:'privado'},
+    missionErrors:{'a2-delivery/0/0':{times:2,last:'2026-11-01',answer:'Texto del alumno'}},
+    missionTimeline:[{missionId:'a2-delivery',date:'2026-11-01',mode:'course',first:2,
+      assisted:1,revealed:0,written:true,writing:'Respuesta privada'}]});
+  assert.equal(copy.missionErrors['a2-delivery/0/0'].times, 2);
+  assert.equal(copy.missionTimeline[0].written, true);
+  assert.doesNotMatch(JSON.stringify(copy), /privad|respuesta|texto del alumno/i);
+  const merged = StudyProfile.combine({version:1, level:'A2', xp:10, completed:{'a1-1':'2026-11-01'}},
+    {version:1, level:'C1', xp:15, completed:{'a1-2':'2026-11-02'}});
+  assert.deepEqual(Object.keys(merged.completed).sort(), ['a1-1','a1-2']);
+  assert.equal(merged.xp, 15);
+  assert.equal(merged.level, 'A2');
 });

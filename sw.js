@@ -1,4 +1,4 @@
-const RELEASE = '3.3.0';
+const RELEASE = '3.3.1';
 const CACHE_PREFIX = 'xanny-english-static-';
 const CACHE = CACHE_PREFIX + RELEASE;
 const PREVIOUS_CACHES = new Set(['fluentlab-static-3.1.0', 'fluentlab-static-v3-20261117']);
@@ -6,7 +6,7 @@ const versioned = name => './' + name + '?v=' + RELEASE;
 const SHELL = './index.html';
 const assets = [
   'styles.css', 'studio.css', 'data.js', 'question-bank.js', 'mission-transfer.js',
-  'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud-config.js', 'cloud.js', 'app.js',
+  'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'cloud-config.js', 'cloud.js', 'app.js',
   'favicon.svg', 'xanny.svg', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'
 ];
 const scope = self.registration.scope;

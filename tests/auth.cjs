@@ -14,7 +14,7 @@ const mail = process.env.XANNY_DEV_MAIL || 'http://127.0.0.1:54324';
 const sdk = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm';
 const otpResponses = new WeakMap();
 const assets = new Set(['index.html', 'styles.css', 'studio.css', 'data.js', 'question-bank.js',
-  'mission-transfer.js', 'missions-data.js', 'adaptive.js', 'study-profile.js', 'cloud.js',
+  'mission-transfer.js', 'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'cloud.js',
   'app.js', 'favicon.svg', 'manifest.webmanifest', 'xanny.svg', 'icon-192.png', 'icon-512.png']);
 const types = {js: 'text/javascript', css: 'text/css', html: 'text/html', svg: 'image/svg+xml',
   webmanifest: 'application/manifest+json', png: 'image/png'};
@@ -162,37 +162,78 @@ async function run() {
     execFileSync('psql', [db, '-X', '-v', 'ON_ERROR_STOP=1', '-c',
       "insert into public.study_teachers select id from auth.users where email = 'class-teacher@example.com'"], {stdio: 'pipe'});
 
-    await confirmAction(one, 'Copiar avance sin cuenta');
-    await one.getByText('Se copió el progreso de estudio', {exact: false}).waitFor();
-    await one.getByRole('button', {name: 'Guardar copia en la nube'}).click();
-    await one.getByText('Copia en la nube guardada', {exact: false}).waitFor();
+
+    const state = (page, value = 'saved') => page.locator('#accountSyncStatus[data-state="' + value + '"]').waitFor();
+    const saveName = async (page, name, level) => {
+      await page.getByLabel('Nombre visible').fill(name);
+      if (level) await page.getByLabel('Nivel de inglés').selectOption(level);
+      await page.getByRole('button', {name: 'Guardar perfil', exact: true}).click();
+    };
+    await state(one);
+    await state(two);
+    await one.getByText('Importar o recuperar historial', {exact:true}).click();
+    await confirmAction(one, 'Reemplazar con progreso sin cuenta', false);
+    assert.equal((await rest(one, 'learning_profiles?select=snapshot')).data[0].snapshot.xp, 0);
+    await confirmAction(one, 'Reemplazar con progreso sin cuenta');
+    await one.getByText('Se importó el progreso de estudio', {exact:false}).waitFor();
+    await saveName(one, 'Alumno de práctica', 'C1');
+    await state(one);
     const who = await authData(one);
     const inaccessible = await rest(two, 'learning_profiles?id=eq.' + who.userId + '&select=id,snapshot');
     assert.equal(inaccessible.status, 200);
     assert.deepEqual(inaccessible.data, []);
-    const own = await rest(one, 'learning_profiles?select=level,snapshot');
+    const wrongAccount = await rest(two, 'rpc/xanny_sync_progress', {p_account:who.userId,p_alias:'Fuera',
+      p_level:'A2',p_snapshot:{version:1,level:'A2'},p_revision:null});
+    assert.equal(wrongAccount.status, 403);
+    const own = await rest(one, 'learning_profiles?select=nickname,level,snapshot');
+    assert.equal(own.data[0].nickname, 'Alumno de práctica');
     assert.equal(own.data[0].level, 'C1');
+    assert.equal(own.data[0].snapshot.xp, 41);
     assert.equal(own.data[0].snapshot.drafts, undefined);
-    console.log('Correo y Auth: dos alumnos y un docente registrados, con aislamiento de copias.');
 
     await signIn(another, 'student-one@example.com');
-    await confirmAction(another, 'Restaurar copia', false);
-    await another.locator('[data-a="cloudRestore"]:enabled').waitFor();
-    assert.equal(await another.evaluate(progressKey => localStorage.getItem(progressKey), who.progressKey), null);
-    await another.evaluate(progressKey => {
-      localStorage.setItem(progressKey, JSON.stringify({version: 1, level: 'A2', xp: 22, completed: {}, drafts: {private: 'LOCAL-DOS'}}));
-    }, who.progressKey);
-    await another.reload();
-    await another.getByText('student-one@example.com', {exact: true}).waitFor();
-    await confirmAction(another, 'Restaurar copia');
-    await another.getByText('Copia restaurada', {exact: false}).waitFor();
+    await state(another);
     const restored = await another.evaluate(progressKey => JSON.parse(localStorage.getItem(progressKey)), who.progressKey);
     assert.equal(restored.completed['a1-1'], '2026-11-01');
-    assert.equal(restored.drafts.private, 'LOCAL-DOS');
-    await confirmAction(another, 'Recuperar respaldo previo');
-    await another.getByText('Progreso anterior recuperado', {exact: false}).waitFor();
-    assert.equal(await another.evaluate(progressKey => JSON.parse(localStorage.getItem(progressKey)).xp, who.progressKey), 22);
-    console.log('Dos navegadores: sesión restaurada, confirmación de copia y respaldo local verificados.');
+    assert.equal(await another.getByLabel('Nombre visible').inputValue(), 'Alumno de práctica');
+
+    await another.context().setOffline(true);
+    await state(another, 'offline');
+    await saveName(another, 'Nombre sin conexión');
+    await state(another, 'offline');
+    assert.equal(await another.evaluate(key => localStorage.getItem(key + ':alias'), who.progressKey), 'Nombre sin conexión');
+    await saveName(one, 'Nombre de la nube');
+    await state(one);
+    await another.context().setOffline(false);
+    await another.getByText('Hay dos versiones del progreso').waitFor();
+    assert.equal((await rest(one, 'learning_profiles?select=nickname')).data[0].nickname, 'Nombre de la nube');
+    assert.equal(await another.getByLabel('Nombre visible').inputValue(), 'Nombre sin conexión');
+    await confirmAction(another, 'Usar la copia de la nube');
+    await state(another);
+    assert.equal(await another.getByLabel('Nombre visible').inputValue(), 'Nombre de la nube');
+    assert.equal(await another.evaluate(key => JSON.parse(localStorage.getItem(key + ':recovery')).nickname, who.progressKey),
+      'Nombre sin conexión');
+
+    const syncUrl = '**/rest/v1/rpc/xanny_sync_progress';
+    await another.route(syncUrl, route => route.fulfill({status:503,contentType:'application/json',
+      headers:{'Access-Control-Allow-Origin':'*'},body:'{"code":"temporary_failure","message":"Prueba de recuperación"}'}));
+    await saveName(another, 'Recuperado tras fallo');
+    await state(another, 'error');
+    assert.equal(await another.evaluate(key => localStorage.getItem(key + ':alias'), who.progressKey), 'Recuperado tras fallo');
+    await another.unroute(syncUrl);
+    await another.getByRole('button',{name:'Sincronizar ahora'}).click();
+    await state(another);
+    assert.equal((await rest(another,'learning_profiles?select=nickname')).data[0].nickname, 'Recuperado tras fallo');
+
+    await one.getByText('Eliminar cuenta y datos',{exact:true}).click();
+    await confirmAction(one,'Solicitar eliminación');
+    await one.getByText('Solicitud registrada.',{exact:false}).waitFor();
+    assert.equal((await rest(one,'account_deletion_requests?select=requested_at')).data.length,1);
+    assert.equal((await rest(two,'account_deletion_requests?select=requested_at')).data.length,0);
+    await one.getByText('Eliminar cuenta y datos',{exact:true}).click();
+    await confirmAction(one,'Cancelar solicitud');
+    await one.getByText('Solicitud de eliminación cancelada.',{exact:true}).waitFor();
+    console.log('Dos usuarios: registro, progreso automático, restauración, conflicto, fallo temporal e aislamiento verificados.');
 
     await show(teacher, 'classroom');
     await teacher.locator('#className').fill('Inglés del martes');
@@ -246,7 +287,7 @@ async function run() {
     await signIn(one, 'student-two@example.com');
     const otherScope = await authData(one);
     assert.notEqual(otherScope.userId, who.userId);
-    assert.equal(await one.evaluate(progressKey => localStorage.getItem(progressKey), otherScope.progressKey), null);
+    assert.equal(await one.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}').completed?.['a1-1'], otherScope.progressKey), undefined);
     assert.deepEqual(errors, []);
     console.log('Supabase Auth y Mailpit: tres cuentas verificadas, recuperación en otro navegador y cambio de cuenta.');
     console.log('Aula: grupo, inscripción, asignación, entrega voluntaria, informe docente y bloqueo de acceso cruzado.');

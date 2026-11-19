@@ -2,7 +2,7 @@ name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/xanny-cuentas-sync]
+    branches: [main, development/xanny-unidades-interfaz]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,7 @@ jobs:
       - name: Pruebas de lógica y compatibilidad
         run: node --test tests/fluentlab.test.cjs tests/progress-sync.test.cjs
       - name: Preparar Playwright para Chrome del runner
-        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2
+        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 axe-core@4.11.1
       - name: Probar escritorio, móvil y Service Worker
         run: node tests/browser.cjs
 
@@ -46,10 +46,10 @@ jobs:
           base=https://xalex-xan.github.io/-fluentlab
           for attempt in {1..18}; do
             if html=$(curl --fail --silent --show-error --max-time 5 "$base/?release=${GITHUB_SHA}&attempt=$attempt") &&
-              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.3.1"* ]]; then
-              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.3.1")
+              [[ "$html" == *"<title>Aprende con Xanny"* && "$html" == *"study-profile.js?v=3.4.0"* ]]; then
+              manifest=$(curl --fail --silent --show-error --max-time 8 "$base/manifest.webmanifest?v=3.4.0")
               printf '%s' "$manifest" | node -e "const m = JSON.parse(require('node:fs').readFileSync(0)); if(m.name !== 'Aprende con Xanny' || m.icons.length !== 2) process.exit(1);"
-              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.3.1" > /dev/null
+              curl --fail --silent --show-error --max-time 8 "$base/xanny.svg?v=3.4.0" > /dev/null
               printf 'Marca, manifest y mascota verificados en GitHub Pages.\n'
               exit 0
             fi
@@ -58,7 +58,7 @@ jobs:
           exit 1
 
   auth:
-    if: github.ref == 'refs/heads/development/xanny-cuentas-sync'
+    if: github.ref == 'refs/heads/development/xanny-unidades-interfaz'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -81,9 +81,9 @@ jobs:
           import re
           path = Path('supabase/config.toml')
           config = path.read_text()
-          config = config.replace('http://127.0.0.1:3000', 'http://127.0.0.1:4173')
+          config = config.replace('http://127.0.0.1:3000', 'https://127.0.0.1:4173')
           config = config.replace('additional_redirect_urls = ["https://127.0.0.1:3000"]',
-                                  'additional_redirect_urls = ["http://127.0.0.1:4173/**"]')
+                                  'additional_redirect_urls = ["https://127.0.0.1:4173/", "https://127.0.0.1:4173/?auth=1"]')
           config = config.replace('email_sent = 2', 'email_sent = 40')
           config = config.replace('enable_confirmations = false', 'enable_confirmations = true', 1)
           config = re.sub(r'(?m)^(\[(?:studio|realtime|storage|edge_runtime|analytics)\]\n)enabled = true$',
@@ -99,7 +99,13 @@ jobs:
             exit 1
           fi
           npx --yes supabase@2.75.0 status -o json > "$RUNNER_TEMP/xanny-supabase.json"
-      - name: Probar correo, dos alumnos, docente y copias entre navegadores
+      - name: Generar certificado HTTPS efímero
+        shell: bash
+        run: |
+          openssl req -newkey rsa:2048 -nodes -x509 -days 1 -subj '/CN=Xanny CI' \
+            -addext 'subjectAltName=IP:127.0.0.1' \
+            -keyout "$RUNNER_TEMP/xanny-ci.key" -out "$RUNNER_TEMP/xanny-ci.crt" 2>/dev/null
+      - name: Probar redirecciones HTTPS, correo, alumnos, docente y sincronización
         shell: bash
         run: |
           export XANNY_DEV_API=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").API_URL')
@@ -107,4 +113,7 @@ jobs:
           export XANNY_DEV_DB=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").DB_URL')
           export XANNY_DEV_MAIL=$(node -p 'const s = require(process.env.RUNNER_TEMP + "/xanny-supabase.json"); s.MAILPIT_URL || s.INBUCKET_URL || "http://127.0.0.1:54324"')
           export XANNY_DEV_SDK="$RUNNER_TEMP/xanny-sdk.mjs"
+          export XANNY_TEST_CERT="$RUNNER_TEMP/xanny-ci.crt"
+          export XANNY_TEST_KEY="$RUNNER_TEMP/xanny-ci.key"
+          export XANNY_TEST_CERT_PIN=$(openssl x509 -in "$XANNY_TEST_CERT" -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 -A)
           node tests/auth.cjs

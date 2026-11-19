@@ -1,46 +1,25 @@
 const assert = require('node:assert/strict');
-const {createServer} = require('node:http');
+const {createStagingServer} = require('../tools/staging-server.cjs');
 const {readFile} = require('node:fs/promises');
-const {join} = require('node:path');
 const {execFileSync} = require('node:child_process');
 const {chromium} = require('playwright');
 
-const root = join(__dirname, '..');
-const base = 'http://127.0.0.1:4173';
+const base = 'https://127.0.0.1:4173';
 const api = process.env.XANNY_DEV_API;
 const key = process.env.XANNY_DEV_KEY;
 const db = process.env.XANNY_DEV_DB;
 const mail = process.env.XANNY_DEV_MAIL || 'http://127.0.0.1:54324';
 const sdk = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3/+esm';
 const otpResponses = new WeakMap();
-const assets = new Set(['index.html', 'styles.css', 'studio.css', 'data.js', 'question-bank.js',
-  'mission-transfer.js', 'missions-data.js', 'adaptive.js', 'study-profile.js', 'progress-sync.js', 'cloud.js',
-  'app.js', 'favicon.svg', 'manifest.webmanifest', 'xanny.svg', 'icon-192.png', 'icon-512.png']);
-const types = {js: 'text/javascript', css: 'text/css', html: 'text/html', svg: 'image/svg+xml',
-  webmanifest: 'application/manifest+json', png: 'image/png'};
 
-function serve() {
-  return createServer(async (request, response) => {
-    const file = new URL(request.url, base).pathname.slice(1) || 'index.html';
-    if (file === 'cloud-config.js') {
-      response.setHeader('Content-Type', 'text/javascript');
-      return response.end('window.XANNY_CLOUD_CONFIG = ' + JSON.stringify({
-        developmentMode: true, accountsEnabled: true, classroomEnabled: true, studyAnalyticsEnabled: true,
-        supabaseUrl: api, publishableKey: key, privacyPolicyUrl: base + '/privacy'
-      }));
-    }
-    if (file === 'privacy') {
-      response.setHeader('Content-Type', 'text/plain');
-      return response.end('Política de privacidad del entorno aislado de prueba.');
-    }
-    if (!assets.has(file)) return response.writeHead(404).end();
-    try {
-      const body = await readFile(join(root, file));
-      response.writeHead(200, {'Content-Type': types[file.split('.').at(-1)]}).end(body);
-    } catch {
-      response.writeHead(404).end();
-    }
-  });
+async function serve() {
+  const [cert, privateKey] = await Promise.all([
+    readFile(process.env.XANNY_TEST_CERT), readFile(process.env.XANNY_TEST_KEY)
+  ]);
+  return createStagingServer({tls:{cert,key:privateKey}, origin:base, config:{
+    developmentMode:true, accountsEnabled:true, classroomEnabled:true, studyAnalyticsEnabled:true,
+    supabaseUrl:api, publishableKey:key, privacyPolicyUrl:base+'/privacy.html'
+  }});
 }
 
 async function messages() {
@@ -86,6 +65,8 @@ async function signIn(page, email, register = false) {
     throw Error('Supabase Auth rechazó el envío de prueba: ' + (otpResponses.get(page) || 'sin respuesta OTP'));
   }
   await openMail(page, email, previous);
+  await page.waitForURL(url => url.origin === base);
+  assert.equal(await page.evaluate(() => isSecureContext && location.protocol === 'https:'), true);
   await page.getByText(email, {exact: true}).waitFor();
 }
 
@@ -140,13 +121,19 @@ async function browserPage(browser, vendor, faults) {
 async function run() {
   if (!api || !key || !db || [api, db, mail].some(url => new URL(url).hostname !== '127.0.0.1')) throw Error('Usa un Supabase local de prueba.');
   const vendor = await readFile(process.env.XANNY_DEV_SDK, 'utf8');
-  const server = serve();
+  const server = await serve();
   await new Promise(resolve => server.listen(4173, '127.0.0.1', resolve));
   let browser;
   try {
-    browser = await chromium.launch({channel: 'chrome'});
+    const pin = process.env.XANNY_TEST_CERT_PIN;
+    if (!pin) throw Error('Falta la huella del certificado efímero de ensayo.');
+    browser = await chromium.launch({channel: 'chrome',args:['--ignore-certificate-errors-spki-list='+pin]});
     const errors = [];
     const one = await browserPage(browser, vendor, errors);
+    const privacy = await one.goto(base+'/privacy.html');
+    assert.equal(privacy.status(),200);
+    assert.match(privacy.headers()['x-robots-tag'],/noindex/);
+    await one.getByRole('heading',{name:'Privacidad del piloto'}).waitFor();
     const two = await browserPage(browser, vendor, errors);
     const teacher = await browserPage(browser, vendor, errors);
     const another = await browserPage(browser, vendor, errors);
@@ -312,7 +299,7 @@ async function run() {
     assert.notEqual(otherScope.userId, who.userId);
     assert.equal(await one.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}').completed?.['a1-1'], otherScope.progressKey), undefined);
     assert.deepEqual(errors, []);
-    console.log('Supabase Auth y Mailpit: tres cuentas verificadas, recuperación en otro navegador y cambio de cuenta.');
+    console.log('HTTPS, Supabase Auth y Mailpit: tres cuentas verificadas, recuperación en otro navegador y cambio de cuenta.');
     console.log('Aula: grupo, inscripción, asignación, entrega voluntaria, informe docente y bloqueo de acceso cruzado.');
   } finally {
     await browser?.close();

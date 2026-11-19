@@ -1,4 +1,4 @@
-# Aprende con Xanny — Cuentas y sincronización
+# Aprende con Xanny — Unidades piloto
 
 Laboratorio de inglés con lecciones, escucha, voz, tarjetas y 16 misiones.
 Cada misión tiene dos variantes y una decisión de transferencia. En práctica libre
@@ -105,3 +105,25 @@ voluntariamente con su grupo constituyen un flujo independiente. Consulta
   cascada. Si hay respaldos o datos en proveedores externos, aplica la política
   de conservación declarada. Verifica la eliminación y registra su atención
   según el procedimiento del responsable.
+
+## Serie de unidades piloto
+
+- **B1 — Cuando el viaje cambia.** Reprogramación de un viaje, lectura de
+  condiciones, escucha de cambios y escritura de avisos.
+- **B2 — Decidir con evidencia.** Interpretación de resultados incompletos,
+  negociación de un piloto, comunicación de límites y memo de decisión.
+
+Cada unidad contiene ocho sesiones y cinco ejercicios por banco. Cada práctica
+presenta tres ejercicios y la evaluación presenta cuatro, evitando repeticiones
+recientes cuando el banco lo permite. Hay selección contextual, respuesta de
+una palabra y ordenación con teclado o toque. Las sesiones alternan análisis,
+escucha con voz del navegador e interacción. Las pistas o transcripciones
+cuentan como ayuda. Los resultados y la fecha de repaso se sincronizan con el
+progreso existente; el texto de escritura permanece en el dispositivo. La
+evaluación separa precisión inicial, corrección asistida y entrega escrita.
+
+El [ensayo HTTPS](docs/ensayo-https.md) explica cómo preparar el servidor
+separado, el SMTP, las redirecciones y el aviso de privacidad. GitHub Actions
+ejecuta la prueba de cuentas con TLS, revisión de accesibilidad con axe y
+presupuestos de recursos en Chrome. La validación del correo real en el host
+y la aprobación del aviso siguen siendo condiciones para abrir el registro.

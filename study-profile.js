@@ -11,7 +11,7 @@ const StudyProfile = (() => {
   const mapKeys = [
     'completed', 'lessonResults', 'wins', 'listeningDone', 'speakingDone', 'writingDone', 'srs',
     'reviewRewarded', 'days', 'recentQuestions', 'errorLog', 'lastListen',
-    'missionHistory', 'missionSkills', 'missionVariants', 'missionErrors', 'missionReviews', 'missionResults'
+    'missionHistory', 'missionSkills', 'missionVariants', 'missionErrors', 'missionReviews', 'missionResults', 'unitRecent', 'unitErrors', 'unitReviews', 'unitSessions'
   ];
   const awarded = new Set(['completed','wins','listeningDone','speakingDone','writingDone','reviewRewarded']);
   const record = v => v && typeof v === 'object' && !Array.isArray(v);
@@ -54,12 +54,13 @@ const StudyProfile = (() => {
       if (awarded.has(field)) safe = date(entry) || entry === true ? entry : undefined;
       else if (field === 'days' || field === 'lastListen') safe = number(entry) ? entry : undefined;
       else if (field === 'missionVariants') safe = variant(entry) ? entry : undefined;
-      else if (field === 'recentQuestions') safe = Array.isArray(entry) ? entry.filter(id).slice(0, 12) : undefined;
-      else if (field === 'missionResults') safe = Object.fromEntries(['free','course'].flatMap(name => {
+      else if (field === 'recentQuestions' || field === 'unitRecent') safe = Array.isArray(entry) ? entry.filter(id).slice(0, 12) : undefined;
+      else if (field === 'missionResults' || field === 'unitSessions') safe = Object.fromEntries(['free','course'].flatMap(name => {
         const result = pick(entry?.[name], schema.result);
         return result ? [[name, result]] : [];
       }));
-      else safe = pick(entry, schema[field === 'missionErrors' ? 'errorLog' : field]);
+      else if (field === 'unitReviews') safe = pick(entry, {interval:number, due:date});
+      else safe = pick(entry, schema[field === 'missionErrors' || field === 'unitErrors' ? 'errorLog' : field]);
       return safe == null ? [] : [[key, safe]];
     }));
   }
@@ -89,7 +90,7 @@ const StudyProfile = (() => {
     if (field === 'days') return Math.max(local, guest);
     if (awarded.has(field)) return date(local) && (!date(guest) || local > guest) ? local : guest;
     if (field === 'missionHistory') return local.plays >= guest.plays ? local : guest;
-    if (field === 'missionResults') {
+    if (field === 'missionResults' || field === 'unitSessions') {
       return Object.fromEntries(['free','course'].flatMap(mode => {
         const a = local[mode], b = guest[mode];
         return a || b ? [[mode, (a?.completed || 0) >= (b?.completed || 0) ? a || b : b]] : [];
@@ -97,12 +98,12 @@ const StudyProfile = (() => {
     }
     if (field === 'lessonResults') return (local.sessions || 0) >= (guest.sessions || 0) ? local : guest;
     if (field === 'missionSkills') return (local.questions || 0) >= (guest.questions || 0) ? local : guest;
-    if (field === 'errorLog' || field === 'missionErrors') {
+    if (field === 'errorLog' || field === 'missionErrors' || field === 'unitErrors') {
       const recent = (local.last || '') >= (guest.last || '') ? local : guest;
       return {...recent, times: Math.max(local.times || 0, guest.times || 0)};
     }
     if (field === 'srs') return (local.last || '') >= (guest.last || '') ? local : guest;
-    if (field === 'missionReviews') return (local.due || '') <= (guest.due || '') ? local : guest;
+    if (field === 'missionReviews' || field === 'unitReviews') return (local.due || '') <= (guest.due || '') ? local : guest;
     return local;
   }
 

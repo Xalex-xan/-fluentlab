@@ -666,7 +666,7 @@ function classroom() {
   if (!window.XannyCloud?.classroomAvailable()) {
     return head + '<section class="card"><p>El aula virtual está desactivada. Las misiones y el progreso local siguen disponibles.</p><button class="button primary" data-a="nav" data-id="missions">Practicar misiones</button></section>';
   }
-  if (ui.cloudBusy && !ui.classroomData) return head + '<p role="status">Consultando el aula…</p>';
+  if (ui.cloudBusy) return head + '<p role="status">Consultando el aula…</p>';
   if (!ui.cloudUser) return head + '<section class="card"><p>Inicia sesión para unirte a una clase.</p><button class="button primary" data-a="nav" data-id="account">Ir a Mi cuenta</button></section>';
   const state = ui.classroomData;
   const status = ui.classroomMessage ? `<p class="info-note" role="status">${esc(ui.classroomMessage)}</p>` : '';
@@ -681,7 +681,7 @@ function classroom() {
 }
 
 async function classroomAction(task, success, reportGroup = null) {
-  if (!ui.cloudUser || ui.classroomBusy || !window.XannyCloud?.classroomAvailable()) return;
+  if (!ui.cloudUser || ui.cloudBusy || ui.classroomBusy || !window.XannyCloud?.classroomAvailable()) return;
   const owner = ui.cloudUser.id;
   ui.classroomBusy = true;
   render();

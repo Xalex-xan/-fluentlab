@@ -173,6 +173,7 @@ async function run() {
     const own = await rest(one, 'learning_profiles?select=level,snapshot');
     assert.equal(own.data[0].level, 'C1');
     assert.equal(own.data[0].snapshot.drafts, undefined);
+    console.log('Correo y Auth: dos alumnos y un docente registrados, con aislamiento de copias.');
 
     await signIn(another, 'student-one@example.com');
     await confirmAction(another, 'Restaurar copia', false);
@@ -191,6 +192,7 @@ async function run() {
     await confirmAction(another, 'Recuperar respaldo previo');
     await another.getByText('Progreso anterior recuperado', {exact: false}).waitFor();
     assert.equal(await another.evaluate(progressKey => JSON.parse(localStorage.getItem(progressKey)).xp, who.progressKey), 22);
+    console.log('Dos navegadores: sesión restaurada, confirmación de copia y respaldo local verificados.');
 
     await show(teacher, 'classroom');
     await teacher.locator('#className').fill('Inglés del martes');
@@ -207,6 +209,9 @@ async function run() {
     await one.locator('#classCode').fill(invite);
     await one.locator('#classAlias').fill('Estudiante Uno');
     await one.getByRole('button', {name: 'Unirme a la clase'}).click();
+    const joinResult = one.locator('.page [role="status"]').filter({hasText: /Te uniste|Revisa el código|permiso|No se pudo/});
+    await joinResult.waitFor();
+    assert.equal(await joinResult.innerText(), 'Te uniste a la clase.');
     await one.getByRole('button', {name: 'Practicar', exact: true}).click();
     const answers = await one.evaluate(progressKey => {
       const variant = JSON.parse(localStorage.getItem(progressKey)).missionVariants['a2-delivery'];

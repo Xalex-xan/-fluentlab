@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: xanny-demo-amigos
+    runtime: node
+    plan: free
+    branch: development/xanny-demo-amigos
+    autoDeployTrigger: "off"
+    buildCommand: node tools/build-demo.cjs
+    startCommand: node tools/demo-server.cjs
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: XANNY_DEMO_ACCESS_FILE
+        value: /etc/secrets/access-demo.json

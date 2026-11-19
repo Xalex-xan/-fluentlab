@@ -13,7 +13,7 @@ const assets = new Set([
   'index.html','privacy.html','styles.css','studio.css','learning.css','icons.svg','xanny.svg',
   'data.js','question-bank.js','mission-transfer.js','missions-data.js','adaptive.js','study-profile.js',
   'progress-sync.js','cloud.js','learning-ui.js','units-data.js','units.js','app.js','manifest.webmanifest',
-  'favicon.svg','icon-192.png','icon-512.png'
+  'favicon.svg','icon-192.png','icon-512.png','cloud-config.js'
 ]);
 
 function accessGate(access) {
@@ -39,7 +39,7 @@ function accessGate(access) {
   };
 }
 
-function stagingHandler({origin, config, privacyHtml, access}, renderEdge) {
+function stagingHandler({origin, config, privacyHtml, access, directory = root, files = assets, siteHeaders}, renderEdge) {
   const target = new URL(origin);
   if (target.protocol !== 'https:' || !privacyHtml) throw Error('Se requiere HTTPS y un aviso de privacidad.');
   const authorized = accessGate(access);
@@ -48,7 +48,7 @@ function stagingHandler({origin, config, privacyHtml, access}, renderEdge) {
     const headers = {
       'Cache-Control':'private, no-store', 'Vary':'Authorization', 'Referrer-Policy':'no-referrer',
       'X-Content-Type-Options':'nosniff', 'X-Frame-Options':'DENY',
-      'X-Robots-Tag':'noindex, nofollow', 'Strict-Transport-Security':'max-age=86400'
+      'X-Robots-Tag':'noindex, nofollow', 'Strict-Transport-Security':'max-age=86400', ...siteHeaders
     };
     if (request.headers.host !== target.host) return response.writeHead(421, headers).end();
     if (renderEdge && request.url === '/healthz' && ['GET','HEAD'].includes(request.method)) {
@@ -66,13 +66,13 @@ function stagingHandler({origin, config, privacyHtml, access}, renderEdge) {
     try { url = new URL(request.url, target); } catch { return response.writeHead(400, headers).end(); }
     if (url.origin !== target.origin) return response.writeHead(421, headers).end();
     const file = url.pathname.slice(1) || 'index.html';
+    if (!files.has(file)) return response.writeHead(404, headers).end();
     if (file === 'cloud-config.js') {
       response.writeHead(200, {...headers,'Content-Type':'text/javascript; charset=utf-8'});
       return response.end(request.method === 'HEAD' ? undefined : bootConfig);
     }
-    if (!assets.has(file)) return response.writeHead(404, headers).end();
     try {
-      const data = file === 'privacy.html' ? privacyHtml : await readFile(join(root,file));
+      const data = file === 'privacy.html' ? privacyHtml : await readFile(join(directory,file));
       if (file === 'privacy.html') {
         headers['Content-Security-Policy'] = "default-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
       }
@@ -92,14 +92,20 @@ function createRenderStagingServer(options) {
   return http.createServer({maxHeaderSize:8192}, stagingHandler(options, true));
 }
 
+function renderOrigin(env) {
+  if (env.RENDER !== 'true') throw Error('El modo Render requiere su proxy HTTPS gestionado.');
+  const origin = new URL(env.RENDER_EXTERNAL_URL || '');
+  if (origin.protocol !== 'https:' || !origin.hostname.endsWith('.onrender.com') || origin.port ||
+    origin.pathname !== '/' || origin.username || origin.password || origin.search || origin.hash) {
+    throw Error('Usa el origen HTTPS onrender.com del servicio de ensayo.');
+  }
+  return origin;
+}
+
 async function main() {
   const env = process.env;
   const render = process.argv.includes('--render');
-  if (render && env.RENDER !== 'true') throw Error('El modo Render requiere su proxy HTTPS gestionado.');
-  const origin = new URL((render ? env.RENDER_EXTERNAL_URL : env.XANNY_STAGING_ORIGIN) || '');
-  if (render && (!origin.hostname.endsWith('.onrender.com') || origin.port)) {
-    throw Error('Usa el origen HTTPS onrender.com del servicio de ensayo.');
-  }
+  const origin = render ? renderOrigin(env) : new URL(env.XANNY_STAGING_ORIGIN || '');
   const key = env.XANNY_STAGING_PUBLISHABLE_KEY || '';
   if (origin.protocol !== 'https:' || origin.hostname.endsWith('.github.io') || origin.pathname !== '/' ||
     origin.username || origin.password || origin.search || origin.hash || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
@@ -137,4 +143,4 @@ if (require.main === module) main().catch(error => {
   console.error(error instanceof SyntaxError ? 'Un archivo JSON de configuración no es válido.' : error.message);
   process.exitCode = 1;
 });
-module.exports = {createStagingServer, createRenderStagingServer};
+module.exports = {createStagingServer, createRenderStagingServer, renderOrigin};

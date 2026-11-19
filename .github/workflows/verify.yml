@@ -2,7 +2,7 @@ name: Verificar Aprende con Xanny
 
 on:
   push:
-    branches: [main, development/xanny-rc-cuentas]
+    branches: [main, development/xanny-rc-cuentas, development/xanny-demo-amigos]
   workflow_dispatch:
 
 permissions:
@@ -22,6 +22,20 @@ jobs:
         run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 axe-core@4.11.1
       - name: Probar escritorio, móvil y Service Worker
         run: node tests/browser.cjs
+      - name: Probar la demostración sin cuentas
+        if: github.ref == 'refs/heads/development/xanny-demo-amigos'
+        run: node tests/demo-browser.cjs
+      - name: Empaquetar la demostración para revisión
+        if: github.ref == 'refs/heads/development/xanny-demo-amigos'
+        run: node tools/build-demo.cjs
+      - name: Adjuntar el paquete revisable
+        if: github.ref == 'refs/heads/development/xanny-demo-amigos'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: aprende-con-xanny-demo
+          path: dist-demo/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Verificar el esquema de acceso con PostgreSQL
         run: |
@@ -59,7 +73,7 @@ jobs:
           exit 1
 
   auth:
-    if: github.ref == 'refs/heads/development/xanny-rc-cuentas'
+    if: github.ref == 'refs/heads/development/xanny-rc-cuentas' || github.ref == 'refs/heads/development/xanny-demo-amigos'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

@@ -73,12 +73,11 @@ function attachMobileInvites(server, access, origin) {
       req.on('error', () => { if (!res.writableEnded) res.writeHead(400, secureHeaders).end(); });
       return;
     }
-    if (!req.headers.authorization) {
-      const cookie = (req.headers.cookie || '').split(';').map(value=>value.trim())
-        .find(value=>value.startsWith(INVITE_COOKIE+'='));
-      const authorized = matchingTicket(cookie && cookie.slice(INVITE_COOKIE.length+1));
-      if (authorized) req.headers.authorization = authorized.authorization;
-    }
+    const cookie = (req.headers.cookie || '').split(';').map(value=>value.trim())
+      .find(value=>value.startsWith(INVITE_COOKIE+'='));
+    const authorized = matchingTicket(cookie && cookie.slice(INVITE_COOKIE.length+1));
+    // A valid invitation cookie takes priority over stale browser Basic Auth credentials.
+    if (authorized) req.headers.authorization = authorized.authorization;
     return basicHandler(req, res);
   });
   return server;

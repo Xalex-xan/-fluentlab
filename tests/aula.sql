@@ -1,6 +1,10 @@
 \set ON_ERROR_STOP on
 \ir schema.sql
 reset role;
+-- El proyecto de desarrollo alojado usa estos nombres para las políticas de 3.2.
+alter policy own_profile_create on public.learning_profiles rename to learning_profiles_insert_self;
+alter policy own_profile_update on public.learning_profiles rename to learning_profiles_update_self;
+alter policy own_event_insert on public.study_events rename to study_events_insert_self;
 \ir ../supabase_aula_33.sql
 
 insert into auth.users values

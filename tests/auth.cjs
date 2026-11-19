@@ -112,6 +112,11 @@ async function show(page, name) {
   await page.locator('.sidebar .nav [data-id="' + name + '"]').click();
 }
 
+async function confirmAction(page, name, accept = true) {
+  const dialog = page.waitForEvent('dialog').then(box => accept ? box.accept() : box.dismiss());
+  await Promise.all([dialog, page.getByRole('button', {name, exact: true}).click()]);
+}
+
 async function browserPage(browser, vendor, faults) {
   const context = await browser.newContext({viewport: {width: 1360, height: 800}, serviceWorkers: 'block'});
   await context.route(sdk, route => route.fulfill({
@@ -157,8 +162,7 @@ async function run() {
     execFileSync('psql', [db, '-X', '-v', 'ON_ERROR_STOP=1', '-c',
       "insert into public.study_teachers select id from auth.users where email = 'class-teacher@example.com'"], {stdio: 'pipe'});
 
-    one.once('dialog', dialog => dialog.accept());
-    await one.getByRole('button', {name: 'Copiar avance sin cuenta'}).click();
+    await confirmAction(one, 'Copiar avance sin cuenta');
     await one.getByText('Se copió el progreso de estudio', {exact: false}).waitFor();
     await one.getByRole('button', {name: 'Guardar copia en la nube'}).click();
     await one.getByText('Copia en la nube guardada', {exact: false}).waitFor();
@@ -171,23 +175,20 @@ async function run() {
     assert.equal(own.data[0].snapshot.drafts, undefined);
 
     await signIn(another, 'student-one@example.com');
-    another.once('dialog', dialog => dialog.dismiss());
-    await another.getByRole('button', {name: 'Restaurar copia'}).click();
-    await another.getByRole('button', {name: 'Restaurar copia'}).waitFor({state: 'visible'});
+    await confirmAction(another, 'Restaurar copia', false);
+    await another.locator('[data-a="cloudRestore"]:enabled').waitFor();
     assert.equal(await another.evaluate(progressKey => localStorage.getItem(progressKey), who.progressKey), null);
     await another.evaluate(progressKey => {
       localStorage.setItem(progressKey, JSON.stringify({version: 1, level: 'A2', xp: 22, completed: {}, drafts: {private: 'LOCAL-DOS'}}));
     }, who.progressKey);
     await another.reload();
     await another.getByText('student-one@example.com', {exact: true}).waitFor();
-    another.once('dialog', dialog => dialog.accept());
-    await another.getByRole('button', {name: 'Restaurar copia'}).click();
+    await confirmAction(another, 'Restaurar copia');
     await another.getByText('Copia restaurada', {exact: false}).waitFor();
     const restored = await another.evaluate(progressKey => JSON.parse(localStorage.getItem(progressKey)), who.progressKey);
     assert.equal(restored.completed['a1-1'], '2026-11-01');
     assert.equal(restored.drafts.private, 'LOCAL-DOS');
-    another.once('dialog', dialog => dialog.accept());
-    await another.getByRole('button', {name: 'Recuperar respaldo previo'}).click();
+    await confirmAction(another, 'Recuperar respaldo previo');
     await another.getByText('Progreso anterior recuperado', {exact: false}).waitFor();
     assert.equal(await another.evaluate(progressKey => JSON.parse(localStorage.getItem(progressKey)).xp, who.progressKey), 22);
 

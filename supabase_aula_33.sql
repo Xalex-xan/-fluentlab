@@ -64,6 +64,10 @@ create table public.classroom_results (
 create index classroom_groups_owner on public.classroom_groups(owner_id);
 create index classroom_members_student on public.classroom_members(student_id);
 create index classroom_results_group_recent on public.classroom_results(group_id, submitted_at desc);
+create index classroom_results_student_assignment on public.classroom_results(group_id, student_id, assignment_id, submitted_at desc);
+create index classroom_results_assignment_member on public.classroom_results(assignment_id, group_id, student_id);
+create index classroom_assignments_mission on public.classroom_assignments(mission_id);
+create index learning_profiles_level on public.learning_profiles(level);
 
 alter table public.study_levels enable row level security;
 alter table public.study_teachers enable row level security;
@@ -81,7 +85,14 @@ grant select on public.study_analytics_preferences to authenticated;
 create policy own_consent_read on public.study_analytics_preferences for select to authenticated
   using ((select auth.uid()) = user_id);
 
-drop policy own_event_insert on public.study_events;
+drop policy if exists own_event_insert on public.study_events;
+drop policy if exists study_events_insert_self on public.study_events;
+alter table public.study_events add constraint study_events_payload_v33 check (
+  (kind in ('mission_started', 'lesson_started', 'mission_error') and score is null)
+  or
+  (kind in ('mission_completed', 'lesson_completed', 'listening_completed', 'mission_skill')
+    and score is not null and score between 0 and 100)
+);
 create policy own_event_insert on public.study_events for insert to authenticated
   with check ((select auth.uid()) = user_id and exists (
     select 1 from public.study_analytics_preferences where user_id = (select auth.uid()) and enabled
@@ -132,8 +143,10 @@ create trigger require_event_consent before insert on public.study_events
 -- Restaurar se confirma en el cliente. Guardar aplica control de versión atómico.
 revoke insert (id, nickname, level, snapshot), update (id, nickname, level, snapshot)
   on public.learning_profiles from authenticated;
-drop policy own_profile_create on public.learning_profiles;
-drop policy own_profile_update on public.learning_profiles;
+drop policy if exists own_profile_create on public.learning_profiles;
+drop policy if exists own_profile_update on public.learning_profiles;
+drop policy if exists learning_profiles_insert_self on public.learning_profiles;
+drop policy if exists learning_profiles_update_self on public.learning_profiles;
 create function public.xanny_save_progress(
   p_alias text, p_level text, p_snapshot jsonb, p_expected timestamptz
 ) returns jsonb language plpgsql security definer set search_path = '' as $$

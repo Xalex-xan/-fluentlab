@@ -29,7 +29,8 @@ configuración publicada. La versión de GitHub Pages sigue en `main`.
 
 1. Usa un proyecto separado o Supabase CLI con Docker. En una base nueva aplica
    `supabase_setup.sql` y luego `supabase_aula_33.sql`. Si el esquema 3.2 ya
-   existe, aplica solo la segunda migración. Haz un respaldo antes de migrar un
+   existe, aplica solo la segunda migración. `xanny-dev` ya tiene aplicada
+   `xanny_aula_virtual_33` en el historial de migraciones. Haz un respaldo antes de migrar un
    proyecto con datos. Ambos archivos están diseñados para ejecutarse una vez.
 2. Configura los enlaces por correo y autoriza la URL exacta de la app de
    desarrollo con `?auth=1`. Para el entorno local de CI la app usa

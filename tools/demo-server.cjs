@@ -19,7 +19,10 @@ async function main() {
   const origin = renderOrigin(process.env);
   const port = Number(process.env.PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Puerto de demostración inválido.');
-  const access = JSON.parse(await readFile(process.env.XANNY_DEMO_ACCESS_FILE, 'utf8'));
+  // Prefer Render's private environment setting when available; the local file remains supported.
+  const accessSource = process.env.XANNY_DEMO_ACCESS_JSON ||
+    await readFile(process.env.XANNY_DEMO_ACCESS_FILE, 'utf8');
+  const access = JSON.parse(accessSource);
   const server = await createDemoServer({origin:origin.origin,access});
   server.listen(port, '0.0.0.0', () => console.log('Demostración privada lista en ' + origin.origin));
 }

@@ -134,8 +134,7 @@ async function browserPage(browser, vendor, faults) {
 
 async function run() {
   if (!api || !key || !db || [api, db, mail].some(url => new URL(url).hostname !== '127.0.0.1')) throw Error('Usa un Supabase local de prueba.');
-  const vendor = await readFile(join(root, 'node_modules/@supabase/supabase-js/dist/umd/supabase.js'), 'utf8')
-    + '\nexport const createClient = globalThis.supabase.createClient;';
+  const vendor = await readFile(process.env.XANNY_DEV_SDK, 'utf8');
   const server = serve();
   await new Promise(resolve => server.listen(4173, '127.0.0.1', resolve));
   let browser;

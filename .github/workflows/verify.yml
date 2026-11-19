@@ -65,7 +65,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Preparar pruebas de navegador
-        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 @supabase/supabase-js@2.95.3
+        run: npm install --no-package-lock --no-save --ignore-scripts playwright@1.58.2 @supabase/supabase-js@2.95.3 esbuild@0.25.12
+      - name: Compilar el SDK de prueba como módulo de navegador
+        shell: bash
+        run: |
+          printf '%s\n' "export { createClient } from '@supabase/supabase-js';" | \
+            npx --no-install esbuild --bundle --platform=browser --format=esm --outfile="$RUNNER_TEMP/xanny-sdk.mjs"
       - name: Iniciar Supabase de desarrollo aislado
         shell: bash
         run: |
@@ -99,4 +104,5 @@ jobs:
           export XANNY_DEV_KEY=$(node -p 'const s = require(process.env.RUNNER_TEMP + "/xanny-supabase.json"); s.PUBLISHABLE_KEY || s.ANON_KEY')
           export XANNY_DEV_DB=$(node -p 'require(process.env.RUNNER_TEMP + "/xanny-supabase.json").DB_URL')
           export XANNY_DEV_MAIL=$(node -p 'const s = require(process.env.RUNNER_TEMP + "/xanny-supabase.json"); s.MAILPIT_URL || s.INBUCKET_URL || "http://127.0.0.1:54324"')
+          export XANNY_DEV_SDK="$RUNNER_TEMP/xanny-sdk.mjs"
           node tests/auth.cjs

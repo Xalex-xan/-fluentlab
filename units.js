@@ -21,7 +21,9 @@ const LearningUnits = (() => {
     const due = (unit, item) => progress().unitReviews[keyOf(unit, item)]?.due <= day();
     const strong = (label, data) => `<div><strong>${data}</strong><span>${label}</span></div>`;
     function focus(id) {
-      document.getElementById(id)?.focus({preventScroll:true});
+      const target = document.getElementById(id);
+      target?.focus({preventScroll:true});
+      target?.scrollIntoView({block:'nearest', behavior:'instant'});
     }
     function refresh(id) {
       render();

@@ -124,7 +124,7 @@ async function checkUnitSession(page, unit, session, options = {}) {
     await page.getByRole('button',{name:'Reproducir audio'}).click();
     const played = await page.evaluate(() => window.lastStudyUtterance);
     assert.match(played.text, /Quick update: our coach/);
-    assert.equal(played.rate, .92);
+    assert.ok(Math.abs(played.rate - .92) < 0.001, 'Velocidad de escucha');
     await page.getByRole('button',{name:'Transcripción'}).click();
     assert.equal(await page.locator('#unitTranscript').isVisible(), true);
   }

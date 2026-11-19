@@ -7,7 +7,7 @@ const activeAccountKey = KEY + ':active-account';
 let progressSync, syncSession, lastLocalRecord;
 let storageOK=true;
 const sections=[['home','Inicio','⌂'],['missions','Misiones reales','◈'],['path','Mi ruta','◈'],['listen','Escuchar','◉'],['speak','Hablar','◌'],['cards','Tarjetas','▣'],['errors','Mis errores','↻'],['progress','Mi progreso','▥'],['account','Mi cuenta','♙'],['classroom','Aula virtual','▧'],['grammar','Gramática','✳'],['write','Escribir','✎'],['resources','Biblioteca','▤'],['settings','Ajustes','⚙']];
-const defaults=()=>({version:1,level:'A2',goal:3,accent:'en-US',theme:'dark',xp:0,completed:{},wins:{},listeningDone:{},speakingDone:{},writingDone:{},srs:{},reviewRewarded:{},days:{},drafts:{},placementHistory:[],recentQuestions:{},errorLog:{},lastListen:{},missionHistory:{},missionSkills:{},missionDrafts:{},learningMode:'free',missionVariants:{},missionErrors:{},missionReviews:{},missionResults:{},missionTimeline:[]});
+const defaults=()=>({version:1,level:'A2',goal:3,accent:'en-US',theme:'dark',xp:0,completed:{},lessonResults:{},wins:{},listeningDone:{},speakingDone:{},writingDone:{},srs:{},reviewRewarded:{},days:{},drafts:{},placementHistory:[],recentQuestions:{},errorLog:{},lastListen:{},missionHistory:{},missionSkills:{},missionDrafts:{},learningMode:'free',missionVariants:{},missionErrors:{},missionReviews:{},missionResults:{},missionTimeline:[]});
 let progress=load();
 function normalizeProgress(saved) {
   const base = defaults();
@@ -568,7 +568,7 @@ function setProfileName(value) {
 }
 
 function applyStudyProfile(payload, previous, allowSync) {
-  archiveProfile(previous);
+  if (previous) archiveProfile(previous);
   const next = normalizeProgress({...progress, ...payload.snapshot});
   const raw = JSON.stringify(next);
   localStorage.setItem(progressKey, raw);
@@ -602,7 +602,7 @@ function startProgressSync(account) {
     convertRemote: row => ({nickname: cleanAlias(row.nickname), snapshot: StudyProfile.snapshot(
       normalizeProgress({...defaults(), ...StudyProfile.snapshot(row.snapshot), level: row.level})
     )}),
-    applyLocal: (payload, previous) => applyStudyProfile(payload, previous, false),
+    applyLocal: (payload, previous, backup) => applyStudyProfile(payload, backup ? previous : null, false),
     archive: archiveProfile,
     onState: setSyncState
   });
@@ -900,6 +900,17 @@ function record(){const SR=window.SpeechRecognition||window.webkitSpeechRecognit
 function downloadData(other){try{const source=typeof other==='string'?JSON.parse(other):progress;const blob=new Blob([JSON.stringify({...source,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`Aprende-con-Xanny-progreso-${day()}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Copia del progreso exportada.')}catch(e){toast('No fue posible exportar el archivo.')}}
 function importData(file){if(!file)return;if(file.size>2_000_000){toast('La copia es demasiado grande (máximo 2 MB).');return}const rd=new FileReader();rd.onload=()=>{try{const p=JSON.parse(rd.result);if(p.version!==1||!StudyProfile.levels.includes(p.level)||typeof p.xp!=='number'||typeof p.completed!=='object'||!p.completed)throw Error('invalid');if(progressKey!==KEY){if(!confirm('¿Reemplazar el progreso de esta cuenta con el archivo? Se guardará un respaldo local.'))return;archiveProfile(currentProfile());}progress=normalizeProgress(p);save();ui.reviewQueue=null;toast('Progreso importado correctamente.');navPage('home')}catch(e){toast('Archivo no válido: importa una copia JSON de tu progreso.')}};rd.readAsText(file)}
 function doReview(rating){const id=ui.reviewQueue?.shift(),v=DATA.vocabulary.find(x=>x.id===id);if(!v)return;const prev=progress.srs[id]||{interval:0,ease:2.4,reps:0};let iv=prev.interval,reps=prev.reps,ease=prev.ease;if(rating==='again'){iv=0;reps=0;ease=Math.max(1.3,ease-.18)}else if(rating==='hard'){iv=1;reps++;ease=Math.max(1.3,ease-.1)}else if(rating==='good'){iv=prev.interval===0?1:Math.max(2,Math.round(prev.interval*ease));reps++}else{iv=prev.interval===0?4:Math.max(4,Math.round(prev.interval*(ease+.4)));reps++;ease+=.1}progress.srs[id]={interval:iv,reps,ease,due:plusDays(iv),last:day()};if(rating!=='again'){ui.reviewSuccess++;awardOnce('reviewRewarded',`${day()}:${id}`,5)}else{activity(0)}ui.reviewCount++;ui.cardFlipped=false;save();render()}
+function recordLessonResult(lesson, session) {
+  const old = progress.lessonResults[lesson.id] || {};
+  progress.lessonResults[lesson.id] = {
+    sessions: (old.sessions || 0) + 1,
+    first: (old.first || 0) + session.firstTry,
+    assisted: (old.assisted || 0) + session.score - session.firstTry,
+    revealed: (old.revealed || 0) + session.items.length - session.score,
+    lastDate: day()
+  };
+}
+
 function checkWriting(){const item=getWriting();const s=$('writingText')?.value||'';progress.drafts[item.id]=s;const f=writingFeedback(s,item);ui.writeFeedback=f;if(f.passes){awardOnce('writingDone',item.id,20);toast('Alcanzaste la extensión orientativa. Guardamos tu actividad de escritura.')}else save();render()}
 function clickAction(e){const el=e.target.closest('[data-a]');if(!el)return;const action=el.dataset.a,id=el.dataset.id,ix=Number(el.dataset.index);switch(action){
 case 'nav':navPage(id);break;
@@ -946,7 +957,7 @@ case 'speakSlow':speakText(el.dataset.text,.7);break;
 case 'stopAudio':window.speechSynthesis?.cancel();break;
 case 'lessonOption':if(ui.lesson&&!ui.lesson.checked&&!ui.lesson.wrongOptions.includes(ix)){ui.lesson.selected=ix;render()}break;
 case 'lessonCheck':{const s=ui.lesson;if(!s||s.selected===null||s.checked)return;const l=DATA.lessons.find(l=>l.id===s.id),q=s.items[s.index],ok=s.selected===q.answer;if(ok){s.score++;if(!s.attempts){s.firstTry++;awardOnce('wins',l.id+'-'+q.id,5);repairError(l,q)}s.checked=true;s.feedback='right';s.responses.push({id:q.id,text:q.text,correct:q.options[q.answer],why:q.why,attempts:s.attempts,success:true});}else{s.attempts++;s.wrongOptions.push(s.selected);if(s.attempts===1){rememberError(l,q);s.feedback='retry';s.selected=null;}else{s.checked=true;s.feedback='wrong';s.responses.push({id:q.id,text:q.text,correct:q.options[q.answer],why:q.why,attempts:s.attempts,success:false});}}render();break}
-case 'lessonNext':{const s=ui.lesson;if(!s||!s.checked)return;const l=DATA.lessons.find(l=>l.id===s.id);s.index++;s.selected=null;s.checked=false;s.attempts=0;s.wrongOptions=[];s.feedback='';if(s.index>=s.items.length){awardOnce('completed',l.id,30);toast('¡Sesión terminada! Revisa las soluciones y explicaciones.');recordCloudEvent('lesson_completed',l.id,Math.round(s.firstTry/s.items.length*100))}render();break}
+case 'lessonNext':{const s=ui.lesson;if(!s||!s.checked)return;const l=DATA.lessons.find(l=>l.id===s.id);s.index++;s.selected=null;s.checked=false;s.attempts=0;s.wrongOptions=[];s.feedback='';if(s.index>=s.items.length){recordLessonResult(l,s);if(!awardOnce('completed',l.id,30))save();toast('¡Sesión terminada! Revisa las soluciones y explicaciones.');recordCloudEvent('lesson_completed',l.id,Math.round(s.firstTry/s.items.length*100))}render();break}
 case 'listenSelect':switchListen(ix);break;
 case 'listenOption':if(!ui.listenChecked&&!ui.listenWrong.includes(ix)){ui.listenChoice=ix;render()}break;
 case 'listenCheck':{if(ui.listenChoice===null||ui.listenChecked)return;const item=DATA.listening[ui.listenIndex],q=ui.listenQuiz;if(q.answer===ui.listenChoice){ui.listenChecked=true;awardOnce('listeningDone',item.id,15);toast('¡Entendiste el mensaje! +15 XP si es nuevo.');recordCloudEvent('listening_completed',item.id,ui.listenAttempts===0?100:50);}else{ui.listenAttempts++;ui.listenWrong.push(ui.listenChoice);if(ui.listenAttempts===1){ui.listenChoice=null;}else{ui.listenChecked=true;}}render();break}
@@ -1011,6 +1022,18 @@ window.addEventListener('online', () => {
 });
 window.addEventListener('focus', () => progressSync?.focus());
 window.addEventListener('storage', event => {
+  if (event.key === activeAccountKey && window.XannyCloud?.available() && event.newValue !== ui.cloudUser?.id) {
+    const expected = event.newValue || null;
+    if (progressKey !== KEY && progressKey !== KEY + ':account:' + expected) {
+      ui.cloudUser = null;
+      ui.cachedAccount = false;
+      ui.analyticsConsent = false;
+      switchWorkspace(null);
+      render();
+    }
+    if (expected && navigator.onLine !== false) void refreshCloudUser();
+    return;
+  }
   if (event.key === progressKey && event.newValue !== lastLocalRecord) {
     progress = load();
     ui.reviewQueue = null;

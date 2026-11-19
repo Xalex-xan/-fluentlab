@@ -79,8 +79,8 @@ const ProgressSync = (() => {
       show('pending', {conflict: true, remoteRevision: remote?.revision ?? null, remoteDate: remote?.updated_at ?? ''});
     }
 
-    function apply(row, cloudCopy) {
-      options.applyLocal(cloudCopy.value, options.readLocal());
+    function apply(row, cloudCopy, backup = false) {
+      options.applyLocal(cloudCopy.value, options.readLocal(), backup);
       settle(row, cloudCopy.hash);
     }
 
@@ -143,7 +143,7 @@ const ProgressSync = (() => {
               return;
             }
             const cloudCopy = await capture(options.convertRemote(remote));
-            if (!stopped) apply(remote, cloudCopy);
+            if (!stopped) apply(remote, cloudCopy, true);
             return;
           }
           if (decision === 'keep') {

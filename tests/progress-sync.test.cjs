@@ -38,7 +38,7 @@ function device(server) {
     readMeta: () => d.meta, writeMeta: meta => {d.meta = meta;},
     readRemote: () => server.read(), writeRemote: (value, revision) => server.write(value, revision),
     convertRemote: row => ({nickname:row.nickname, snapshot:row.snapshot}),
-    applyLocal: (value, previous) => {d.archived.push(copy(previous)); d.local = copy(value); d.has = true;},
+    applyLocal: (value, previous, backup) => {if (backup) d.archived.push(copy(previous)); d.local = copy(value); d.has = true;},
     archive: value => d.archived.push(copy(value)),
     onState: state => {d.state = state; d.onState?.(state);}
   });
@@ -93,6 +93,7 @@ test('una revisión concurrente exige decisión y conserva ambas versiones', asy
   assert.equal(b.archived.at(-1).snapshot.xp, 41);
   await a.sync.check();
   assert.equal(a.local.snapshot.xp, 33);
+  assert.equal(a.archived.length, 0);
 });
 
 test('un fallo de servidor o de sesión conserva la copia local', async () => {

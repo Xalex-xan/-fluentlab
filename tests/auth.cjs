@@ -235,6 +235,29 @@ async function run() {
     await one.getByText('Solicitud de eliminación cancelada.',{exact:true}).waitFor();
     console.log('Dos usuarios: registro, progreso automático, restauración, conflicto, fallo temporal e aislamiento verificados.');
 
+    await one.getByRole('button',{name:'Sincronizar ahora'}).click();
+    await state(one);
+    await show(one, 'path');
+    await one.locator('[data-a="openLesson"][data-id="a1-1"]').first().click();
+    for (let i = 0; i < 3; i++) {
+      const option = () => one.locator('[data-a="lessonOption"]:not([disabled])').first();
+      const check = one.locator('[data-a="lessonCheck"]');
+      const next = one.locator('[data-a="lessonNext"]');
+      await option().click();
+      await check.click();
+      if (await check.isVisible()) {
+        await option().click();
+        await check.click();
+      }
+      await next.click();
+    }
+    await one.getByText('¡Terminaste tu práctica!',{exact:true}).waitFor();
+    await show(one, 'account');
+    await state(one);
+    const lessons = (await rest(one, 'learning_profiles?select=snapshot')).data[0].snapshot.lessonResults;
+    assert.equal(lessons['a1-1'].sessions, 1);
+    assert.equal(lessons['a1-1'].first + lessons['a1-1'].assisted + lessons['a1-1'].revealed, 3);
+
     await show(teacher, 'classroom');
     await teacher.locator('#className').fill('Inglés del martes');
     await teacher.getByRole('button', {name: 'Crear grupo'}).click();

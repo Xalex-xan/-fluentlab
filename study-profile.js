@@ -9,7 +9,7 @@ const StudyProfile = (() => {
   const scoreKinds = new Set(['mission_completed', 'lesson_completed', 'listening_completed', 'mission_skill']);
 
   const mapKeys = [
-    'completed', 'wins', 'listeningDone', 'speakingDone', 'writingDone', 'srs',
+    'completed', 'lessonResults', 'wins', 'listeningDone', 'speakingDone', 'writingDone', 'srs',
     'reviewRewarded', 'days', 'recentQuestions', 'errorLog', 'lastListen',
     'missionHistory', 'missionSkills', 'missionVariants', 'missionErrors', 'missionReviews', 'missionResults'
   ];
@@ -29,6 +29,7 @@ const StudyProfile = (() => {
     missionHistory: {plays:number, totalQuestions:number, totalFirst:number,
       lastVariant:variant, lastDate:date, lastAccuracy:number},
     missionSkills: {first:number, questions:number},
+    lessonResults: {sessions:number, first:number, assisted:number, revealed:number, lastDate:date},
     errorLog: {times:number, last:date, resolved:v => v === null || date(v)},
     missionReviews: {interval:number, due:date, evidence:v => Array.isArray(v) && v.length <= 2 && v.every(variant),
       demonstratedOn:v => v === null || date(v)},
@@ -94,6 +95,7 @@ const StudyProfile = (() => {
         return a || b ? [[mode, (a?.completed || 0) >= (b?.completed || 0) ? a || b : b]] : [];
       }));
     }
+    if (field === 'lessonResults') return (local.sessions || 0) >= (guest.sessions || 0) ? local : guest;
     if (field === 'missionSkills') return (local.questions || 0) >= (guest.questions || 0) ? local : guest;
     if (field === 'errorLog' || field === 'missionErrors') {
       const recent = (local.last || '') >= (guest.last || '') ? local : guest;
